@@ -156,7 +156,6 @@ function overlay(title,lines){
   ctx.fillStyle='#fff'; ctx.font='bold 16px system-ui'; ctx.fillText('Commencer (Entrée ou clic)', canvas.width/2,canvas.height/2+56);
 }
 
-// Fonction de dessin de la narration consolidée
 function drawNarr(){ drawBG(lvl,performance.now()); overlay(NARR[narrative.idx].t, NARR[narrative.idx].l); } 
 
 function HUD(){ ui.time.textContent=Math.max(0,Math.ceil(time)); ui.meat.textContent=res.meat; ui.stone.textContent=res.stone; ui.wood.textContent=res.wood;
@@ -266,52 +265,4 @@ function end(timeUp){
   if(g.crafted && r.crafted<g.crafted)need.push('objets'); if(g.clothes && !player.warm)need.push('vêtements');
   const ok=need.length===0;
   overlay(ok?'Objectif atteint':'Bilan — il manque', ok?['Entrée/clic pour continuer']:need);
-  narrative.active=true; narrative.idx = ok ? Math.min(lvl+1,4) : lvl; // 4 = épilogue/QCM
-}
-
-/* ---------- Contrôles & stabilité onglet ---------- */
-let keys=new Set();
-document.addEventListener('keydown', e=>{
-  if(narrative.active && (e.code==='Enter'||e.code==='Space')){
-    narrative.active = false;
-    if(narrative.idx===4){ /* QCM optionnel */ } else { initLevel(narrative.idx); startGame(); }
-    return;
-  }
-  if(['ArrowUp','KeyW','ArrowDown','KeyS','ArrowLeft','KeyA','ArrowRight','KeyD'].includes(e.code)) keys.add(e.code);
-  if(e.code==='Space') shoot();
-  if(e.code==='KeyC') clothes();
-  if(e.code==='KeyF') craft();
-  if(e.code==='KeyP'){ running=!running; if(running){ last=performance.now(); requestAnimationFrame(loop); } }
-});
-document.addEventListener('keyup', e=> keys.delete(e.code));
-
-// S'assure de démarrer le jeu après la narration (clic sur la zone de jeu)
-document.addEventListener('click', ()=>{
-  if(narrative.active){
-    narrative.active = false;
-    if(narrative.idx===4){ /* QCM */ } else { initLevel(narrative.idx); startGame(); }
-  }
-});
-
-// Le bouton Lancer/Rejouer doit afficher la narration au début
-btnStart.addEventListener('click', ()=>{ narrative.idx=0; narrative.active=true; drawNarr(); });
-btnPause.addEventListener('click', ()=>{ running=!running; if(running){ last=performance.now(); requestAnimationFrame(loop); } });
-btnClothes.addEventListener('click', clothes);
-
-// Pause si l’onglet est masqué (évite gros dt au retour)
-document.addEventListener('visibilitychange', ()=>{
-  if(document.hidden){ running=false; }
-  else if (!narrative.active) { running=true; last=performance.now(); requestAnimationFrame(loop); }
-});
-
-/* ---------- Démarrage ---------- */
-function boot(){
-    narrative.active=true;
-    narrative.idx=0;
-    // Force le dessin de l'écran de narration au démarrage
-    drawNarr();
-}
-window.addEventListener('load', boot);
-</script>
-</body>
-</html>
+  narrative.active=true; narrative.idx = ok ? Math.min(lvl+1,4) :
