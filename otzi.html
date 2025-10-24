@@ -194,9 +194,6 @@ btnPause.addEventListener('click', ()=>{ running=!running; if(running){ last=per
 
 function overlay(title,text){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 32px system-ui'; ctx.fillText(title,canvas.width/2,canvas.height/2-20); ctx.font='16px system-ui'; (text||'').split('\\n').forEach((ln,i)=>ctx.fillText(ln,canvas.width/2,canvas.height/2+10+i*20)); }
 function startGame(){ running=true; last=performance.now(); loop(); }
-function boot(){ narrative.active=true; narrative.idx=0; drawNarrative(); }
-if(document.readyState==='complete'||document.readyState==='interactive') boot();
-else window.addEventListener('DOMContentLoaded', boot);
   // === Correction affichage narration au démarrage ===
 function boot(){ 
   narrative.active = true; 
