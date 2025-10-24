@@ -99,4 +99,46 @@ class Player{
     ctx.beginPath(); ctx.arc(0,-this.r*1.2,this.r*.55,0,6.283); ctx.fillStyle='#d7b49e'; ctx.fill(); ctx.restore(); }
 }
 class Spear{ constructor(x,y,dir){ this.x=x; this.y=y; this.dir=dir; this.life=0; }
-  update(dt){ this.x+=
+  update(dt){ this.x+=this.dir*5*dt*60; this.life+=dt; } draw(){ ctx.strokeStyle='#d7c27a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(this.x-12,this.y); ctx.lineTo(this.x+12,this.y); ctx.stroke(); } }
+
+class Bison{
+  constructor(x,y,dir,speed){
+    this.x=x; this.y=y; this.dir=dir;
+    this.w=46; this.h=28;
+    this.tagged=false;
+    this.speed = speed ?? 0.7;  // vitesse (plus petit = plus lent)
+  }
+  rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; }
+  update(dt){
+    if(!this.tagged){
+      this.x += this.dir * this.speed * dt * 60;
+      if(this.x<-60) this.x=canvas.width+60;
+      if(this.x>canvas.width+60) this.x=-60;
+    }
+  }
+  draw(){ ctx.fillStyle=this.tagged?'#7cb342':'#5a3d2e'; rr(this.x-this.w/2,this.y-this.h/2,this.w,this.h,6); ctx.fill(); }
+}
+
+class Sheep{ constructor(x,y){ this.x=x; this.y=y; this.w=28; this.h=18; this.tamed=false; this.vx=(Math.random()<0.5?-1:1)*0.35; this.remove=false; }
+  rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; }
+  update(dt,p){ if(!this.tamed){ this.x+=this.vx*dt*60*(0.5+Math.random()*0.2); if(this.x<20||this.x>canvas.width-20)this.vx*=-1;
+                 if(hit(this.rect(),p.rect())) this.tamed=true; }
+               else{ const dx=p.x-this.x, dy=p.y-this.y; this.x+=Math.sign(dx)*0.9*dt*60; this.y+=Math.sign(dy)*0.6*dt*60; } }
+  draw(){ ctx.fillStyle=this.tamed?'#fff8cc':'#f1f1f1'; rr(this.x-this.w/2,this.y-this.h/2,this.w,this.h,6); ctx.fill(); } }
+
+class Pickup{ constructor(x,y,type){ this.x=x; this.y=y; this.type=type; this.remove=false; }
+  rect(){ return {x:this.x-12,y:this.y-12,w:24,h:24}; }
+  draw(){ const m={stone:'#9aa4a9',wood:'#8b5a3c',fiber:'#b1c94a',clay:'#b46a3a'}; ctx.fillStyle=m[this.type]||'#ccc';
+         if(this.type==='stone'||this.type==='fiber'||this.type==='clay'){ ctx.beginPath(); ctx.arc(this.x,this.y,10,0,6.283); ctx.fill(); }
+         else{ rr(this.x-11,this.y-5,22,10,3); ctx.fill(); } } }
+
+/* ---------- État ---------- */
+let running=false,last=performance.now();
+let lvl=0, level=null, time=0, lives=3, cold=0, pen=null, workshop=null;
+let player=null, spears=[], herd=[], sheep=[], pickups=[], res=null;
+let narrative={active:true, idx:0};
+let grace = 5.0;   // 5 s d’invincibilité au début d’un niveau
+
+/* ---------- Décor + UI ---------- */
+function drawBG(i,t){
+  const sky=['#a4d2ff','#bfe3a1','#bfe3ff
