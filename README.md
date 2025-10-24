@@ -1,29 +1,26 @@
-# Ötzi – Campement avant la nuit 
+# Ötzi – Des glaces aux villages (version pédagogique 6e, multi‑niveaux)
 
-Jeu HTML5 pour aborder le thème des débuts de l’humanité en 6e.
+Parcours jouable en 3 niveaux alignés sur votre cours de la « révolution » néolithique :
+1. **Montagnes glaciaires** : chasse (nourriture) et protection contre le froid (fabriquer des vêtements).
+2. **Bord de lac – Chalain** : collecte (pierre/bois/fibres), artisanat.
+3. **Proche-Orient** : champs et débuts de la sédentarisation.
 
-## Intentions d’apprentissage
-- Comprendre les besoins vitaux d’un groupe humain préhistorique.
-- Relier environnement, techniques et survie (chasse, collecte, feu/abri).
-- Mettre en évidence les contraintes (froid, troupeaux, obstacles).
+## Objectifs d’apprentissage
+- Comprendre la transition vers l’agriculture/élevage et la **sédentarisation**.
+- Identifier le rôle des **outils** (pierre/bois) et de l’**artisanat** (fibres, vêtements).
+- Relier **environnement** et **techniques** (froid, disponibilité des ressources).
 
-## Règles du jeu
-- Temps limité pour préparer le campement avant la nuit.
-- Collecter trois catégories de ressources :
-  - Bisons marqués au javelot = **nourriture**.
-  - Pierres ramassées = **outils**.
-  - Bois ramassé = **feu/abri**.
-- Un bilan de fin explique ce qui a manqué (nourriture, outils, bois).
+## Mécaniques pédagogiques
+- **Ressources visibles** : viande (bisons), pierre, bois, fibres (plantes).
+- **Craft** : Fabriquer des vêtements (2 peaux + 2 fibres) → +1 vie & immunité au froid.
+- **Bilan de fin** par niveau : rappelle ce qui manque (nourriture/outils/bois/vêtements).
+- **Progression** : de la chasse mobile au camp sédentaire (3 niveaux).
 
 ## Commandes
-- Flèches / WASD : déplacer Ötzi
-- Espace : lancer un javelot
-- P : pause
-
-## Conseils d’usage en classe
-- Avant le jeu : formuler une hypothèse collective sur “Que faut-il pour survivre ?”
-- Pendant : demander aux élèves de viser un objectif (ex. 4 viandes, 3 pierres, 4 bois).
-- Après : discussion rapide à partir du bilan affiché. Relier aux notions du cours.
+Flèches / WASD pour bouger • Espace = javelot • C = fabriquer vêtements • P = pause.
 
 ## Déploiement
 Publier `index.html` via GitHub Pages (branche `main`, dossier root).
+
+---
+Astuce : ajuster les seuils d’objectifs par niveau dans `LEVELS[i].goals`.
