@@ -71,18 +71,18 @@ const NARR=[
 
 const LVL=[
   { name:"1/4 — Montagnes glaciaires (chasse)", time:70, cold:false,  // froid coupé au L1
-    herd:3, bisonSpeed:0.3,        // VITESSE RÉDUITE (était 0.55)
+    herd:3, bisonSpeed:0.3,        // VITESSE RÉDUITE
     stones:4, woods:3, fibers:0, clays:0, sheep:0,
     goals:{meat:3,stone:2,wood:2,fiber:0,clay:0,livestock:0,crafted:0, clothes:true} },
   { name:"2/4 — Plateau pastoral (élevage)", time:80, cold:false,
-    herd:2, bisonSpeed:0.5,        // VITESSE RÉDUITE (était 0.75)
+    herd:2, bisonSpeed:0.5,        // VITESSE RÉDUITE
     stones:2, woods:3, fibers:2, clays:0, sheep:5, pen:{x:770,y:260,w:150,h:120},
     goals:{meat:1,stone:1,wood:2,fiber:1,clay:0,livestock:3,crafted:0, clothes:false} },
   { name:"3/4 — Village artisanal (atelier)", time:90, cold:false,
     herd:0, stones:6, woods:6, fibers:6, clays:6, sheep:0, workshop:{x:120,y:270,w:120,h:100},
     goals:{meat:0,stone:3,wood:4,fiber:3,clay:3,livestock:0,crafted:5, clothes:false} },
   { name:"4/4 — Agriculture & sédentarisation", time:90, cold:false,
-    herd:2, bisonSpeed:0.5,        // VITESSE RÉDUITE (était 0.75)
+    herd:2, bisonSpeed:0.5,        // VITESSE RÉDUITE
     stones:5, woods:4, fibers:7, clays:0, sheep:0,
     goals:{meat:1,stone:3,wood:3,fiber:5,clay:0,livestock:0,crafted:0, clothes:true} }
 ];
@@ -134,11 +134,57 @@ class Pickup{ constructor(x,y,type){ this.x=x; this.y=y; this.type=type; this.re
 
 /* ---------- État ---------- */
 let running=false,last=performance.now();
+// Initialisation globale plus sûre
 let lvl=0, level=null, time=0, lives=3, cold=0, pen=null, workshop=null;
-let player=null, spears=[], herd=[], sheep=[], pickups=[], res=null;
+let player=null, spears=[], herd=[], sheep=[], pickups=[]; 
+let res={meat:0,stone:0,wood:0,fiber:0,clay:0,livestock:0,crafted:0}; // <--- CORRECTION: INITIALISATION GLOBALE DE RES
 let narrative={active:true, idx:0};
-let grace = 5.0;   // 5 s d’invincibilité au début d’un niveau
+let grace = 5.0;
 
 /* ---------- Décor + UI ---------- */
 function drawBG(i,t){
-  const sky=['#a4d2ff','#bfe3a1','#bfe3ff
+  const sky=['#a4d2ff','#bfe3a1','#bfe3ff','#f5e6b2'][i]; ctx.fillStyle=sky; ctx.fillRect(0,0,canvas.width,220);
+  ctx.fillStyle=['#7aa3c8','#8fc07a','#7cc38e','#d6c877'][i]; ctx.beginPath(); ctx.moveTo(0,220);
+  for(let x=0;x<=canvas.width;x+=60){ const k=i===0?40: i===1?18: i===2?14:10; const h=220-(i===0?50:30)-k*Math.sin((x+t*0.0008)*0.01); ctx.lineTo(x,h); }
+  ctx.lineTo(canvas.width,220); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=['#86c06a','#9ec27a','#7cc38e','#cbbf8c'][i]; ctx.fillRect(0,240,canvas.width,canvas.height-240);
+  if(i===1 && pen){ ctx.fillStyle='rgba(139,90,60,0.35)'; ctx.fillRect(pen.x,pen.y,pen.w,pen.h); ctx.strokeStyle='#8b5a3c'; ctx.strokeRect(pen.x,pen.y,pen.w,pen.h); }
+  if(i===2 && workshop){ ctx.fillStyle='#c89b6d'; rr(workshop.x,workshop.y,workshop.w,workshop.h,10); ctx.fill(); }
+}
+function overlay(title,lines){
+  ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#1b2433'; rr(canvas.width/2-360,canvas.height/2-130,720,200,14); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 28px system-ui'; ctx.fillText(title,canvas.width/2,canvas.height/2-70);
+  ctx.font='16px system-ui'; (lines||[]).forEach((ln,i)=>ctx.fillText(ln,canvas.width/2,canvas.height/2-25+i*22));
+  ctx.fillStyle='#1f6feb'; rr(canvas.width/2-140,canvas.height/2+30,280,40,10); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 16px system-ui'; ctx.fillText('Commencer (Entrée ou clic)', canvas.width/2,canvas.height/2+56);
+}
+
+function drawNarr(){ drawBG(lvl,performance.now()); overlay(NARR[narrative.idx].t, NARR[narrative.idx].l); } 
+
+function HUD(){ ui.time.textContent=Math.max(0,Math.ceil(time)); ui.meat.textContent=res.meat; ui.stone.textContent=res.stone; ui.wood.textContent=res.wood;
+                ui.fiber.textContent=res.fiber; ui.clay.textContent=res.clay; ui.livestock.textContent=res.livestock; ui.crafted.textContent=res.crafted;
+                ui.spears.textContent=player ? player.spears : 0; ui.lives.textContent=lives; } // Utilisation conditionnelle de player
+
+/* ---------- Init niveau ---------- */
+function initLevel(i){
+  lvl=i; level=LVL[i]; time=level.time; lives=3; cold=0; pen=level.pen||null; workshop=level.workshop||null;
+  player=new Player(); player.x = 120; player.y = 440;     // spawn sûr à gauche
+  grace = 5.0;                                            // 5 s d’invincibilité
+  spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,clay:0,livestock:0,crafted:0};
+
+  // bisons spawn loin du joueur
+  for(let k=0;k<level.herd;k++){
+    const x = 480 + Math.random()*(canvas.width-520); // loin du joueur
+    const y = 300 + Math.random()*180;
+    const dir = Math.random()<0.5 ? -1 : 1;
+    herd.push(new Bison(x, y, dir, level.bisonSpeed ?? 0.7));
+  }
+  // moutons
+  for(let k=0;k<level.sheep;k++){
+    const x = 420 + Math.random()*(canvas.width-460);
+    const y = 300 + Math.random()*160;
+    sheep.push(new Sheep(x,y));
+  }
+  // ressources
+  const add=(n,t)=>{ for
