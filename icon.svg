@@ -11,6 +11,7 @@
   <path d="M98 58 q10 6 0 12" fill="none" stroke="#e8e0cf" stroke-width="3"/>
   <rect x="20" y="88" width="26" height="10" fill="#8b5a3c" stroke="#caa07c"/>
   <rect x="52" y="90" width="20" height="12" fill="#b1c94a" stroke="#e6ef99"/>
+  <rect x="76" y="92" width="20" height="12" fill="#b46a3a" stroke="#e7a880"/>
   <circle cx="44" cy="36" r="15" fill="#7a5230"/>
   <circle cx="44" cy="24" r="9" fill="#d7b49e"/>
 </svg>
