@@ -1,13 +1,142 @@
-<!doctype html><html lang="fr"><meta charset="utf-8">
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DIAG JS</title>
-<style>html,body{margin:0;height:100%;background:#0e141b;color:#e8eef6;font-family:system-ui}
-.wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px}
-canvas{background:#93c5fd;border-radius:12px;width:min(920px,95vw);height:calc(min(920px,95vw)*0.56)}</style>
-<div class="wrap"><h1>Diagnostic JavaScript</h1>
-<canvas id="c" width="960" height="540"></canvas><p>Si tu vois un carré tourner avec “JS OK”, tout est bon.</p></div>
+<title>Ötzi — mini version sûre</title>
+<style>
+  html,body{margin:0;height:100%;background:#0e141b;color:#e8eef6;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px}
+  canvas{background:#93c5fd;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);
+         width:min(980px,95vw);height:calc(min(980px,95vw)*0.56);image-rendering:pixelated;outline:none}
+  .hud{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:center;font-weight:600}
+  .kbd{padding:2px 6px;border-radius:6px;background:#223049;font-family:ui-monospace,Menlo,Consolas,monospace}
+  button{padding:10px 14px;border-radius:10px;border:0;background:#1f6feb;color:#fff;font-weight:700;cursor:pointer}
+</style>
+
+<div class="wrap">
+  <h1>Ötzi — mini version sûre</h1>
+  <div class="hud">
+    <span>Temps: <b id="time">60</b>s</span>
+    <span>Ressources: <b id="res">0</b></span>
+    <button id="start">Lancer / Rejouer</button>
+  </div>
+  <canvas id="game" width="960" height="540" tabindex="0" aria-label="Jeu test"></canvas>
+  <div>Commandes : <span class="kbd">← → ↑ ↓</span> ou <span class="kbd">W A S D</span> • <span class="kbd">Entrée</span> démarre</div>
+</div>
+
 <script>
-const cv=document.getElementById('c'),ctx=cv.getContext('2d');let t0=performance.now();
-(function loop(){const t=(performance.now()-t0)/700;ctx.fillStyle='#93c5fd';ctx.fillRect(0,0,cv.width,cv.height);
-ctx.save();ctx.translate(cv.width/2,cv.height/2);ctx.rotate(t);ctx.fillStyle='#10b981';ctx.fillRect(-80,-80,160,160);ctx.restore();
-ctx.fillStyle='#fff';ctx.font='bold 32px system-ui';ctx.fillText('JS OK',40,60);requestAnimationFrame(
+/* ---------- Sécurité : empêcher le scroll avec les flèches ---------- */
+['keydown','keypress'].forEach(t=>document.addEventListener(t,e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Enter'].includes(e.code)) e.preventDefault();
+},{passive:false}));
+
+/* ---------- Setup ---------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const uiTime = document.getElementById('time');
+const uiRes  = document.getElementById('res');
+const btn    = document.getElementById('start');
+
+let running=false, last=performance.now(), time=60, res=0, keys=new Set();
+const player = {x:200, y:380, r:16, vx:0, vy:0, speed:2.5};
+
+function resize(){
+  const r = canvas.getBoundingClientRect(), dpr = devicePixelRatio||1;
+  canvas.width = Math.round(r.width*dpr);
+  canvas.height= Math.round(r.height*dpr);
+}
+new ResizeObserver(resize).observe(canvas); resize();
+
+/* ---------- Entrée clavier ---------- */
+addEventListener('keydown',e=>{
+  if(narrative.active && (e.code==='Enter' || e.code==='Space')){ startGame(); return; }
+  keys.add(e.code);
+});
+addEventListener('keyup',e=> keys.delete(e.code));
+document.addEventListener('click', ()=>{ if(narrative.active) startGame(); });
+
+/* ---------- Narration simple ---------- */
+const narrative = {active:true};
+function drawIntro(){
+  // fond
+  drawBackground(0);
+  // voile + panneau
+  ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  roundRect(canvas.width/2-360, canvas.height/2-130, 720, 200, 14, true);
+  ctx.fillStyle='#fff'; ctx.textAlign='center';
+  ctx.font='bold 28px system-ui'; ctx.fillText('Avant le niveau — Les glaces', canvas.width/2, canvas.height/2-70);
+  ctx.font='16px system-ui';
+  ctx.fillText('Tu es Ötzi. Appuie sur Entrée ou clique pour commencer.', canvas.width/2, canvas.height/2-20);
+  ctx.fillStyle='#1f6feb'; roundRect(canvas.width/2-140, canvas.height/2+30, 280, 40, 10, true);
+  ctx.fillStyle='#fff'; ctx.font='bold 16px system-ui'; ctx.fillText('Commencer (Entrée ou clic)', canvas.width/2, canvas.height/2+56);
+}
+
+/* ---------- Lancement ---------- */
+btn.addEventListener('click', ()=> startGame());
+function startGame(){
+  narrative.active=false; running=true; last=performance.now(); time=60; res=0;
+  player.x=200; player.y=380; keys.clear(); loop();
+}
+
+/* ---------- Boucle ---------- */
+function loop(){
+  if(!running) return;
+  const t=performance.now(), dt=(t-last)/16.67; last=t;
+  // input
+  const up=keys.has('ArrowUp')||keys.has('KeyW');
+  const dn=keys.has('ArrowDown')||keys.has('KeyS');
+  const lf=keys.has('ArrowLeft')||keys.has('KeyA');
+  const rg=keys.has('ArrowRight')||keys.has('KeyD');
+  player.vx = (rg?1:0)-(lf?1:0);
+  player.vy = (dn?1:0)-(up?1:0);
+  player.x = clamp(player.x + player.vx*player.speed*dt, player.r, canvas.width-player.r);
+  player.y = clamp(player.y + player.vy*player.speed*dt, 220, canvas.height-player.r);
+
+  // ramassage d’un “caillou” simple
+  if (Math.random()<0.02) pickups.push(spawnPickup());
+  pickups.forEach(p=>{ if(!p.gone && hit(p, player)){ p.gone=true; res++; uiRes.textContent=res; } });
+  pickups = pickups.filter(p=>!p.gone);
+
+  // timer
+  time -= dt/60;
+  if(time<=0){ running=false; overlay('Fin du test', 'Clique sur Lancer / Rejouer.'); return; }
+  uiTime.textContent = Math.max(0, Math.ceil(time));
+
+  // draw
+  drawBackground(t);
+  pickups.forEach(drawPickup);
+  drawPlayer();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- Petits outils ---------- */
+function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+function hit(p,pl){ const dx=p.x-pl.x, dy=p.y-pl.y; return Math.hypot(dx,dy) < pl.r+10; }
+function roundRect(x,y,w,h,r,fill){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); fill?ctx.fill():ctx.stroke(); }
+function drawBackground(t){
+  // ciel + montagnes
+  ctx.fillStyle='#a4d2ff'; ctx.fillRect(0,0,canvas.width,240);
+  ctx.fillStyle='#7aa3c8'; ctx.beginPath(); ctx.moveTo(0,220);
+  for(let x=0;x<=canvas.width;x+=60){ const peak=220-50-40*Math.sin((x+t*0.0008)*0.01); ctx.lineTo(x,peak); }
+  ctx.lineTo(canvas.width,220); ctx.closePath(); ctx.fill();
+  // sol
+  ctx.fillStyle='#86c06a'; ctx.fillRect(0,240,canvas.width,canvas.height-240);
+}
+function drawPlayer(){
+  ctx.save(); ctx.translate(player.x,player.y);
+  ctx.globalAlpha=.25; ctx.beginPath(); ctx.ellipse(0,player.r,player.r*.9,player.r*.4,0,0,Math.PI*2); ctx.fillStyle='#1b2a3b'; ctx.fill(); ctx.globalAlpha=1;
+  ctx.beginPath(); ctx.moveTo(0,-player.r); ctx.lineTo(player.r*.9,player.r); ctx.lineTo(-player.r*.9,player.r); ctx.closePath(); ctx.fillStyle='#7a5230'; ctx.fill();
+  ctx.beginPath(); ctx.arc(0,-player.r*1.2,player.r*.55,0,Math.PI*2); ctx.fillStyle='#d7b49e'; ctx.fill(); ctx.restore();
+}
+let pickups=[]; function spawnPickup(){ return {x:Math.random()*(canvas.width-60)+30,y:Math.random()*(canvas.height-280)+260}; }
+function drawPickup(p){ ctx.save(); ctx.translate(p.x,p.y); ctx.fillStyle='#9aa4a9'; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+function overlay(title,text){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 32px system-ui'; ctx.fillText(title,canvas.width/2,canvas.height/2-20);
+  ctx.font='16px system-ui'; ctx.fillText(text,canvas.width/2,canvas.height/2+10); }
+
+/* ---------- Démarrage : montrer l'intro ---------- */
+function boot(){ narrative.active=true; drawIntro(); }
+if (document.readyState==='complete' || document.readyState==='interactive') boot();
+else window.addEventListener('DOMContentLoaded', boot);
+</script>
+</html>
