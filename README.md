@@ -1,14 +1,7 @@
-# Ötzi – Des glaces aux villages (version narrative)
-Ajout de **séquences visuelles** entre chaque niveau pour contextualiser : glaces → élevage → artisanat → agriculture, plus un **épilogue** avant le QCM.
+# Ötzi – Correctif de démarrage
+Cette version empêche le **scroll de la page** quand on appuie sur les **flèches** (ça bloquait parfois les contrôles) et force un **resize initial** du canvas.
 
-## Contrôles
-- Déplacement : Flèches / WASD
-- Javelot : Espace (bisons uniquement)
-- Vêtements : C (2 peaux + 2 fibres)
-- Fabrication atelier (niveau 3) : F
-- Pause : P
-- QCM : 1 / 2 / 3
-- **Narration : Entrée** (ou clic) pour continuer
-
-## Déploiement
-Publier `index.html` (et ces fichiers) via GitHub Pages (branche main, root).
+## À faire si votre version ne répond pas :
+1. Remplacez votre `index.html` par ce fichier.
+2. Videz le cache (Ctrl/Cmd+Shift+R).
+3. Vérifiez que GitHub Pages pointe bien sur la branche `main`, dossier `/ (root)`.
