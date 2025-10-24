@@ -1,8 +1,11 @@
-# Ötzi – Version narrative (correctif “Entrée/Clic”)
-Ce correctif règle le problème “Entrée ne fait rien” :  
-- écoute **globale** du clavier (window/document/body) avec `preventDefault()` ;  
-- **clic n’importe où** pour avancer la narration ;  
-- **focus** automatique sur le canvas ;  
-- **resize initial** du canvas.
+# Ötzi — ALL‑IN‑ONE
+Version consolidée : **narration + 4 niveaux + élevage + atelier (artisanat) + QCM**, avec correctifs clavier (Entrée/Space/Flèches), focus canvas et resize initial.
 
-Remplace ton `index.html` par celui-ci et fais un **hard refresh** (Cmd/Ctrl+Shift+R).
+## Niveaux
+1. Chasse (montagnes glaciaires). Vêtements = 2 peaux + 2 fibres.  
+2. Élevage (plateau pastoral). Amadouer et guider les bêtes dans l’enclos.  
+3. Artisanat (village/atelier). F pour fabriquer : poterie (argile+bois), outil (pierre+bois), corde (2 fibres). Objectif : 5 objets.  
+4. Agriculture (Proche‑Orient). Bilan + QCM final.
+
+## Déploiement
+Uploader `index.html` à la racine du dépôt (GitHub Pages → main / root). Hard refresh : Cmd/Ctrl+Shift+R.
