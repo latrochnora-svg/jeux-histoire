@@ -2,7 +2,7 @@
 <html lang="fr">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ötzi — Bypass cache (otzi.html)</title>
+<title>Ötzi — bypass cache (otzi.html)</title>
 <style>
   html,body{margin:0;height:100%;background:#0e141b;color:#e8eef6;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
   .wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px}
@@ -75,8 +75,8 @@ function hitRect(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a
 
 class Player{ constructor(){ this.x=canvas.width/2; this.y=canvas.height-70; this.r=16; this.vx=0; this.vy=0; this.speed=2.4; this.spears=3; this.reload=0; this.hides=0; this.warm=false; this.inv=0; } update(dt){ this.x=clamp(this.x+this.vx*this.speed*dt, this.r, canvas.width-this.r); this.y=clamp(this.y+this.vy*this.speed*dt, 220, canvas.height-this.r); this.reload=Math.max(0,this.reload-dt); if(this.inv>0) this.inv-=dt; } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.globalAlpha=.25; ctx.beginPath(); ctx.ellipse(0,this.r,this.r*.9,this.r*.4,0,0,Math.PI*2); ctx.fillStyle='#1b2a3b'; ctx.fill(); ctx.globalAlpha=1; ctx.beginPath(); ctx.moveTo(0,-this.r); ctx.lineTo(this.r*.9,this.r); ctx.lineTo(-this.r*.9,this.r); ctx.closePath(); ctx.fillStyle=this.warm?'#8d6e63':'#7a5230'; ctx.fill(); ctx.beginPath(); ctx.arc(0,-this.r*1.2,this.r*.55,0,Math.PI*2); ctx.fillStyle='#d7b49e'; ctx.fill(); ctx.restore(); } }
 class Spear{ constructor(x,y,dir){ this.x=x; this.y=y; this.dir=dir; this.life=0; } update(dt){ this.x+=this.dir*5*dt*60; this.life+=dt; } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.dir>0?0:Math.PI); ctx.strokeStyle='#d7c27a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.stroke(); ctx.restore(); } }
-class Bison{ constructor(x,y,dir){ this.x=x; this.y=y; this.dir=dir; this.w=46; this.h=28; this.tagged=false; } update(dt){ if(!this.tagged){ this.x+=this.dir*1.2*dt*60; if(this.x<-60)this.x=canvas.width+60; if(this.x>canvas.width+60)this.x=-60; } } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle=this.tagged?'#7cb342':'#5a3d2e'; rr(-this.w/2,-this.h/2,this.w,this.h,6,true); ctx.restore(); } rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w	this.w,h	this.h}; } }
-class Sheep{ constructor(x,y){ this.x=x; this.y=y; this.w=28; this.h=18; this.tamed=false; this.vx=(Math.random()<0.5?-1:1)*0.4; this.remove=false; } update(dt,p){ if(!this.tamed){ this.x+=this.vx*dt*60*(0.5+Math.random()*0.2); if(this.x<20||this.x>canvas.width-20)this.vx*=-1; if(hitRect({x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h	this.h},{x:p.x-16,y:p.y-16,w:32,h:32})) this.tamed=true; } else { const dx=p.x-this.x, dy=p.y-this.y; this.x+=Math.sign(dx)*0.9*dt*60; this.y+=Math.sign(dy)*0.6*dt*60; } } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle=this.tamed?'#fff8cc':'#f1f1f1'; rr(-this.w/2,-this.h/2,this.w,this.h,6,true); ctx.restore(); } rect(){ return {x:this.x-this.w/2,y	this.y-this.h/2,w	this.w,h	this.h}; } }
+class Bison{ constructor(x,y,dir){ this.x=x; this.y=y; this.dir=dir; this.w=46; this.h=28; this.tagged=false; } update(dt){ if(!this.tagged){ this.x+=this.dir*1.2*dt*60; if(this.x<-60)this.x=canvas.width+60; if(this.x>canvas.width+60)this.x=-60; } } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle=this.tagged?'#7cb342':'#5a3d2e'; rr(-this.w/2,-this.h/2,this.w,this.h,6,true); ctx.restore(); } rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; } }
+class Sheep{ constructor(x,y){ this.x=x; this.y=y; this.w=28; this.h=18; this.tamed=false; this.vx=(Math.random()<0.5?-1:1)*0.4; this.remove=false; } update(dt,p){ if(!this.tamed){ this.x+=this.vx*dt*60*(0.5+Math.random()*0.2); if(this.x<20||this.x>canvas.width-20)this.vx*=-1; if(hitRect({x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h},{x:p.x-16,y:p.y-16,w:32,h:32})) this.tamed=true; } else { const dx=p.x-this.x, dy=p.y-this.y; this.x+=Math.sign(dx)*0.9*dt*60; this.y+=Math.sign(dy)*0.6*dt*60; } } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle=this.tamed?'#fff8cc':'#f1f1f1'; rr(-this.w/2,-this.h/2,this.w,this.h,6,true); ctx.restore(); } rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; } }
 class Pickup{ constructor(x,y,type){ this.x=x; this.y=y; this.type=type; this.remove=false; } draw(){ ctx.save(); ctx.translate(this.x,this.y); const m={stone:'#9aa4a9',wood:'#8b5a3c',fiber:'#b1c94a',clay:'#b46a3a'}; ctx.fillStyle=m[this.type]||'#ccc'; if(this.type==='stone'||this.type==='fiber'||this.type==='clay'){ ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill(); } else { rr(-11,-5,22,10,3,true); } ctx.restore(); } rect(){ return {x:this.x-12,y:this.y-12,w:24,h:24}; } }
 
 let levelIndex=0, level=null, player=null, spears=[], herd=[], sheep=[], pickups=[], time=0, lives=3, res=null, pen=null, workshop=null, narrative={active:true, idx:0}, quiz=null, cold=0;
@@ -101,6 +101,8 @@ function drawNarrative(){
   ctx.fillStyle='#1f6feb'; rr(canvas.width/2-140, canvas.height/2+30, 280, 40, 10, true);
   ctx.fillStyle='#fff'; ctx.font='bold 16px system-ui'; ctx.fillText('Commencer (Entrée ou clic)', canvas.width/2, canvas.height/2+56);
 }
+
+function overlay(title,text){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 32px system-ui'; ctx.fillText(title,canvas.width/2,canvas.height/2-20); ctx.font='16px system-ui'; (text||'').split('\n').forEach((ln,i)=>ctx.fillText(ln,canvas.width/2,canvas.height/2+10+i*20)); }
 
 function initLevel(i){
   levelIndex=i; level=LEVELS[i]; player=new Player(); spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,clay:0,livestock:0,crafted:0}; time=level.duration; lives=3; pen=level.pen||null; workshop=level.workshop||null; cold=0;
@@ -165,22 +167,9 @@ function end(timeUp){
   narrative.active=true; narrative.idx = ok ? Math.min(levelIndex+1, 4) : levelIndex;
 }
 
-const QUIZ=[{q:"Pourquoi l’élevage change la vie des hommes ?",a:["Nourriture plus régulière","Supprime les outils","Supprime le feu"],i:0},
-            {q:"La poterie sert surtout à…",a:["Stocker/cuire des aliments","Remplacer la pierre","Faire fuir les prédateurs"],i:0},
-            {q:"La sédentarisation signifie…",a:["S’installer durablement","Se déplacer sans arrêt","Vivre isolé"],i:0}];
-let quizState=null;
-function showQuiz(){ quizState={i:0,score:0}; drawQuiz(); }
-function drawQuiz(){ const it=QUIZ[quizState.i]; overlay("QCM – Révise le Néolithique", "1) "+it.a[0]+"\\n2) "+it.a[1]+"\\n3) "+it.a[2]+"\\nRéponds avec 1/2/3."); }
+/* --------- CONTROLES --------- */
 document.addEventListener('keydown', e=>{
-  if(!quizState) return;
-  if(e.code==='Digit1'||e.code==='Digit2'||e.code==='Digit3'){
-    const it=QUIZ[quizState.i], c=Number(e.code.slice(-1))-1; if(c===it.i) quizState.score++;
-    quizState.i++; if(quizState.i>=QUIZ.length){ overlay("Bravo !", "Score : "+quizState.score+"/"+QUIZ.length+"."); quizState=null; } else drawQuiz();
-  }
-});
-
-document.addEventListener('keydown', e=>{
-  if(narrative.active && (e.code==='Enter'||e.code==='Space')){ if(narrative.idx===4){ showQuiz(); } else { initLevel(narrative.idx); startGame(); } return; }
+  if(narrative.active && (e.code==='Enter'||e.code==='Space')){ if(narrative.idx===4){ /* (QCM optionnel ici) */ } else { initLevel(narrative.idx); startGame(); } return; }
   if(['ArrowUp','KeyW','ArrowDown','KeyS','ArrowLeft','KeyA','ArrowRight','KeyD'].includes(e.code)) keys.add(e.code);
   if(e.code==='Space') shoot();
   if(e.code==='KeyC') clothes();
@@ -188,18 +177,17 @@ document.addEventListener('keydown', e=>{
   if(e.code==='KeyP'){ running=!running; if(running){ last=performance.now(); loop(); } }
 });
 document.addEventListener('keyup', e=> keys.delete(e.code));
-document.addEventListener('click', ()=>{ if(narrative.active){ if(narrative.idx===4){ showQuiz(); } else { initLevel(narrative.idx); startGame(); } } });
+document.addEventListener('click', ()=>{ if(narrative.active){ if(narrative.idx===4){ /* QCM */ } else { initLevel(narrative.idx); startGame(); } } });
 btnStart.addEventListener('click', ()=>{ narrative.idx=0; narrative.active=true; drawNarrative(); });
 btnPause.addEventListener('click', ()=>{ running=!running; if(running){ last=performance.now(); loop(); } });
 
-function overlay(title,text){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 32px system-ui'; ctx.fillText(title,canvas.width/2,canvas.height/2-20); ctx.font='16px system-ui'; (text||'').split('\\n').forEach((ln,i)=>ctx.fillText(ln,canvas.width/2,canvas.height/2+10+i*20)); }
+/* --------- DEMARRAGE SÛR (pas de doublon) --------- */
 function startGame(){ running=true; last=performance.now(); loop(); }
-  // === Correction affichage narration au démarrage ===
-function boot(){ 
-  narrative.active = true; 
-  narrative.idx = 0; 
-  drawNarrative(); 
-  console.log("BOOT OK — narration affichée");
+function boot(){
+  narrative.active = true;
+  narrative.idx = 0;
+  drawNarrative();
+  console.log('BOOT OK — narration affichée');
 }
 window.addEventListener('load', boot);
 </script>
