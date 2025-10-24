@@ -181,14 +181,12 @@ document.addEventListener('click', ()=>{ if(narrative.active){ if(narrative.idx=
 btnStart.addEventListener('click', ()=>{ narrative.idx=0; narrative.active=true; drawNarrative(); });
 btnPause.addEventListener('click', ()=>{ running=!running; if(running){ last=performance.now(); loop(); } });
 
-/* --------- DEMARRAGE SÛR (pas de doublon) --------- */
-function startGame(){ running=true; last=performance.now(); loop(); }
-function boot(){
-  narrative.active = true;
-  narrative.idx = 0;
-  drawNarrative();
-  console.log('BOOT OK — narration affichée');
-}
-window.addEventListener('load', boot);
+/* --------- DEMARRAGE FORCÉ --------- */
+narrative.active = true;
+narrative.idx = 0;
+drawNarrative();                           // affiche la narration TOUT DE SUITE
+window.addEventListener('load', () => {    // la ré-affiche au cas où
+  narrative.active = true; narrative.idx = 0; drawNarrative();
+});
 </script>
 </html>
