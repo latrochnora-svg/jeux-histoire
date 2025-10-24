@@ -40,7 +40,7 @@
 </div>
 
 <script>
-/* ---------- Base stable (moteur simple) ---------- */
+/* ---------- Base ---------- */
 const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
 const UI=id=>document.getElementById(id);
 const ui={ levelName:UI('levelName'), time:UI('time'), meat:UI('meat'), stone:UI('stone'), wood:UI('wood'),
@@ -52,14 +52,14 @@ const btnStart=document.getElementById('btnStart'), btnPause=document.getElement
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Enter'].includes(e.code)) e.preventDefault();
 },{passive:false}));
 
-/* ---------- Outils dessin ---------- */
+/* ---------- Outils ---------- */
 function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function hit(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- Niveaux + narration ---------- */
 const NARR=[
-  {t:"Avant le niveau 1 — Les glaces", l:["Tu es Ötzi.","Le froid est mordant : il faut chasser et se protéger.","Objectifs : nourriture, outils, vêtements (2 peaux + 2 fibres)."]},
+  {t:"Avant le niveau 1 — Les glaces", l:["Tu es Ötzi.","Le froid est mordant : chasse et protège-toi.","Objectifs : nourriture, outils, vêtements (2 peaux + 2 fibres)."]},
   {t:"Avant le niveau 2 — Élevage", l:["Les glaces reculent : on apprivoise des animaux.","Approche les moutons : ils te suivent.","Guide-en 3 dans l’enclos."]},
   {t:"Avant le niveau 3 — Artisanat", l:["Poterie, tissage, outils.","Recueille des ressources et fabrique 5 objets à l’atelier (F)."]},
   {t:"Avant le niveau 4 — Agriculture", l:["On cultive et on s’installe : sédentarisation.","Atteins les objectifs puis QCM final."]},
@@ -111,6 +111,7 @@ let running=false,last=performance.now(),keys=new Set();
 let lvl=0, level=null, time=0, lives=3, cold=0, pen=null, workshop=null;
 let player=null, spears=[], herd=[], sheep=[], pickups=[], res=null;
 let narrative={active:true, idx:0};
+let grace = 0;   // délai d’invincibilité au début d’un niveau (en secondes)
 
 /* ---------- Décor + UI ---------- */
 function drawBG(i,t){
@@ -138,13 +139,26 @@ function HUD(){ ui.time.textContent=Math.max(0,Math.ceil(time)); ui.meat.textCon
 /* ---------- Init niveau ---------- */
 function initLevel(i){
   lvl=i; level=LVL[i]; time=level.time; lives=3; cold=0; pen=level.pen||null; workshop=level.workshop||null;
-  player=new Player(); spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,clay:0,livestock:0,crafted:0};
-  // troupeaux
-  for(let k=0;k<level.herd;k++) herd.push(new Bison(Math.random()*canvas.width, 300+Math.random()*180, Math.random()<0.5?-1:1));
-  for(let k=0;k<level.sheep;k++) sheep.push(new Sheep(Math.random()*canvas.width, 300+Math.random()*160));
+  player=new Player(); player.x = 120; player.y = 440;     // spawn sûr à gauche
+  grace = 2.0;                                            // 2 s d’invincibilité
+  spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,clay:0,livestock:0,crafted:0};
+
+  // bisons spawn loin du joueur
+  for(let k=0;k<level.herd;k++){
+    const x = 400 + Math.random()*(canvas.width-420);
+    const y = 300 + Math.random()*180;
+    herd.push(new Bison(x, y, Math.random()<0.5?-1:1));
+  }
+  // moutons
+  for(let k=0;k<level.sheep;k++){
+    const x = 360 + Math.random()*(canvas.width-380);
+    const y = 300 + Math.random()*160;
+    sheep.push(new Sheep(x,y));
+  }
   // ressources
   const add=(n,t)=>{ for(let k=0;k<n;k++) pickups.push(new Pickup(40+Math.random()*(canvas.width-80), 280+Math.random()*(canvas.height-320), t)); };
   add(level.stones,'stone'); add(level.woods,'wood'); add(level.fibers,'fiber'); add(level.clays,'clay');
+
   ui.levelName.textContent=level.name; HUD(); drawBG(lvl,performance.now());
 }
 
@@ -161,17 +175,38 @@ function loop(){
   // projectiles & troupeaux
   spears.forEach(s=>s.update(dt)); spears=spears.filter(s=>s.life<3 && s.x>-20 && s.x<canvas.width+20);
   herd.forEach(b=>b.update(dt));
-  // collisions chasse
-  for(const s of spears){ for(const b of herd){ if(!b.tagged && hit({x:s.x-6,y:s.y-2,w:12,h:4}, b.rect())){ b.tagged=true; s.life=10; res.meat++; player.hides++; } } }
-  for(const b of herd){ if(!b.tagged && player.inv<=0 && hit(b.rect(), player.rect())){ lives--; player.inv=2; if(lives<=0) return end(false); } }
-  // pickups
+
+  // collisions chasse (après la grâce)
+  if(grace <= 0){
+    for(const s of spears){
+      for(const b of herd){
+        if(!b.tagged && hit({x:s.x-6,y:s.y-2,w:12,h:4}, b.rect())){
+          b.tagged=true; s.life=10; res.meat++; player.hides++;
+        }
+      }
+    }
+    for(const b of herd){
+      if(!b.tagged && player.inv<=0 && hit(b.rect(), player.rect())){
+        lives--; player.inv=2; if(lives<=0) return end(false);
+      }
+    }
+  }
+
+  // ressources
   for(const p of pickups){ if(!p.remove && hit(p.rect(), player.rect())){ p.remove=true; res[p.type]++; } }
   pickups=pickups.filter(p=>!p.remove);
+
   // élevage
   if(level.sheep>0 && pen){ for(const sh of sheep){ sh.update(dt,player); if(!sh.remove && sh.tamed && hit(sh.rect(), pen)){ sh.remove=true; res.livestock++; } } }
   sheep=sheep.filter(s=>!s.remove);
-  // froid
-  if(level.cold && !player.warm){ cold+=dt; if(cold>3){ cold=0; lives--; if(lives<=0) return end(false); } }
+
+  // froid (pas pendant la grâce)
+  if(grace <= 0 && level.cold && !player.warm){
+    cold+=dt; if(cold>3){ cold=0; lives--; if(lives<=0) return end(false); }
+  }
+
+  // décrémente la grâce (en secondes)
+  if(grace > 0) grace -= dt/60;
 
   time -= dt/60; if(time<=0) return end(true);
 
@@ -221,7 +256,7 @@ btnStart.addEventListener('click', ()=>{ narrative.idx=0; narrative.active=true;
 btnPause.addEventListener('click', ()=>{ running=!running; if(running){ last=performance.now(); loop(); } });
 btnClothes.addEventListener('click', clothes);
 
-/* ---------- Démarrage forcé (zéro surprise) ---------- */
+/* ---------- Démarrage ---------- */
 function boot(){ narrative.active=true; narrative.idx=0; drawNarr(); }
 window.addEventListener('load', boot);
 </script>
