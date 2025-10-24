@@ -197,5 +197,13 @@ function startGame(){ running=true; last=performance.now(); loop(); }
 function boot(){ narrative.active=true; narrative.idx=0; drawNarrative(); }
 if(document.readyState==='complete'||document.readyState==='interactive') boot();
 else window.addEventListener('DOMContentLoaded', boot);
+  // === Correction affichage narration au démarrage ===
+function boot(){ 
+  narrative.active = true; 
+  narrative.idx = 0; 
+  drawNarrative(); 
+  console.log("BOOT OK — narration affichée");
+}
+window.addEventListener('load', boot);
 </script>
 </html>
