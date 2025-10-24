@@ -3,98 +3,381 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ötzi – Start Fix</title>
+  <title>Ötzi – Version narrative (correctif)</title>
   <style>
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0e141b; color:#e8eef6; }
     .wrap { display:flex; flex-direction:column; align-items:center; gap:12px; padding:18px; }
-    canvas { background:#93c5fd; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); width: min(980px, 95vw); height: calc(min(980px, 95vw) * 0.56); image-rendering: pixelated; }
+    canvas { background:#93c5fd; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); width: min(980px, 95vw); height: calc(min(980px, 95vw) * 0.56); image-rendering: pixelated; outline:none }
     .hud { display:flex; gap:16px; flex-wrap:wrap; align-items:center; justify-content:center; font-weight:600; }
     .btns { display:flex; gap:8px; flex-wrap:wrap; }
     button { padding:10px 14px; border-radius:10px; border:0; background:#1f6feb; color:white; font-weight:700; cursor:pointer; box-shadow: 0 4px 14px rgba(31,111,235,.35);} 
     button.secondary{ background:#2b3950; }
+    .tip { font-size:14px; opacity:.9 }
     .kbd { padding:2px 6px; border-radius:6px; background:#223049; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .pill { padding:3px 8px; border-radius:999px; background:#0b5; color:white; font-weight:700; font-size:12px; }
+    .intro { max-width:min(980px,95vw); background:#101a28; border-radius:12px; padding:12px 14px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Ötzi – Test & correctif de démarrage</h1>
-    <div class="hud">
-      <button id="startBtn">Lancer / Rejouer</button>
-      <button id="pauseBtn" class="secondary">Pause</button>
+    <h1>Ötzi – Des glaces aux villages</h1>
+    <div class="intro">
+      Quatre étapes du Néolithique avec <b>séquences visuelles</b> entre les niveaux :
+      <span class="pill">1. Chasse</span> → <span class="pill">2. Élevage</span> → <span class="pill">3. Artisanat</span> → <span class="pill">4. Agriculture</span>.
     </div>
-    <canvas id="game" width="960" height="540"></canvas>
-    <div>Contrôles : <span class="kbd">← → ↑ ↓</span> ou <span class="kbd">W A S D</span> • <span class="kbd">Espace</span> lance.</div>
+
+    <div class="hud">
+      <div>Niveau : <span id="levelName">1/4</span></div>
+      <div>Temps : <span id="time">75</span>s</div>
+      <div>Nourriture : <span id="meat">0</span></div>
+      <div>Pierre : <span id="stone">0</span></div>
+      <div>Bois : <span id="wood">0</span></div>
+      <div>Fibres : <span id="fiber">0</span></div>
+      <div>Argile : <span id="clay">0</span></div>
+      <div>Bétail : <span id="livestock">0</span></div>
+      <div>Objets : <span id="crafted">0</span></div>
+      <div>Javelots : <span id="spears">3</span></div>
+      <div>Vies : <span id="lives">3</span></div>
+      <button id="craftBtn" class="secondary" title="2 peaux + 2 fibres">Fabriquer vêtements</button>
+      <div class="btns">
+        <button id="startBtn">Lancer / Rejouer</button>
+        <button id="pauseBtn" class="secondary">Pause</button>
+        <button id="easyBtn" class="secondary">Difficulté : Normal</button>
+      </div>
+    </div>
+
+    <canvas id="game" width="960" height="540" tabindex="0" aria-label="Jeu pédagogique multi-niveaux avec narration"></canvas>
+    <div class="tip">Commandes : <span class="kbd">← → ↑ ↓</span> / <span class="kbd">W A S D</span> • <span class="kbd">Espace</span> javelot • <span class="kbd">C</span> vêtements • <span class="kbd">F</span> atelier • <span class="kbd">P</span> pause • <span class="kbd">Entrée</span> narration • <span class="kbd">1/2/3</span> QCM.</div>
   </div>
 
 <script>
+// ===== Utilitaires
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => Math.random() * (b - a) + a;
+const now = () => performance.now();
+
+// ===== Niveaux
+const LEVELS = [
+  { name:"Montagnes glaciaires (chasse)", duration:70, cold:true,
+    goals:{ meat:3, stone:2, wood:2, fiber:0, clay:0, craft:false, livestock:0, crafted:0 },
+    herdSize:6, stones:4, woods:3, fibers:0, clays:0, sheep:0, bisonSpeed:1.2,
+    drawBG:(ctx,w,h,t)=>drawAlpine(ctx,w,h,t)
+  },
+  { name:"Plateau pastoral (élevage)", duration:80, cold:false,
+    goals:{ meat:1, stone:1, wood:2, fiber:1, clay:0, craft:false, livestock:3, crafted:0 },
+    herdSize:2, stones:2, woods:3, fibers:2, clays:0, sheep:5, bisonSpeed:1.0,
+    drawBG:(ctx,w,h,t)=>drawPastoral(ctx,w,h,t),
+    pen:{x: 780, y: 260, w: 150, h: 120}
+  },
+  { name:"Village artisanal (fabrication)", duration:90, cold:false,
+    goals:{ meat:0, stone:3, wood:4, fiber:3, clay:3, craft:false, livestock:0, crafted:5 },
+    herdSize:0, stones:6, woods:6, fibers:6, clays:6, sheep:0, bisonSpeed:0.9,
+    drawBG:(ctx,w,h,t)=>drawWorkshopVillage(ctx,w,h,t),
+    workshop:{x: 120, y: 270, w: 120, h: 100}
+  },
+  { name:"Proche-Orient – champs & sédentarisation", duration:90, cold:false,
+    goals:{ meat:1, stone:3, wood:3, fiber:5, clay:0, craft:true, livestock:0, crafted:0 },
+    herdSize:2, stones:5, woods:4, fibers:7, clays:0, sheep:0, bisonSpeed:0.9,
+    drawBG:(ctx,w,h,t)=>drawFertileCrescent(ctx,w,h,t)
+  }
+];
+
+// ===== Narration
+const NARRATION = [
+  { title:"Avant le niveau 1 — Les glaces",
+    lines:["Tu es Ötzi, il y a plus de 5000 ans.","Le froid est mordant : il faut chasser et se protéger.","Objectifs : nourriture, outils, vêtements (2 peaux + 2 fibres)."],
+    painter:(ctx,w,h,t)=>drawAlpine(ctx,w,h,t) },
+  { title:"Avant le niveau 2 — Élevage",
+    lines:["Les glaces reculent. Les hommes apprivoisent des animaux.","Approche les bêtes pour qu’elles te suivent.","Guide-les dans l’enclos (objectif : 3)."],
+    painter:(ctx,w,h,t)=>drawPastoral(ctx,w,h,t) },
+  { title:"Avant le niveau 3 — Artisanat",
+    lines:["Près des lacs, de nouvelles techniques apparaissent.","Poterie, tissage, outils : fabrique 5 objets à l’atelier.","Touche F à l’atelier."],
+    painter:(ctx,w,h,t)=>drawWorkshopVillage(ctx,w,h,t) },
+  { title:"Avant le niveau 4 — Agriculture",
+    lines:["On cultive la terre et on s’installe durablement.","Naissance des villages : sédentarisation.","Atteins les objectifs puis conclue."],
+    painter:(ctx,w,h,t)=>drawFertileCrescent(ctx,w,h,t) },
+  { title:"Épilogue — Révolution néolithique",
+    lines:["Bravo ! Tu as vécu : chasse → élevage → artisanat → agriculture.","Réponds au QCM pour réviser les notions."],
+    painter:(ctx,w,h,t)=>drawFinalPanorama(ctx,w,h,t) }
+];
+
+// ===== Config & DOM
+const CONFIG = { playerSpeed: 2.2, spearSpeed: 5.0, spearMax: 3, spearRecharge: 1.7, rocks: 7, difficulty: 1 };
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-let running=false, last=performance.now();
-const player = { x: 200, y: 380, r: 16, vx:0, vy:0, speed: 3 };
+const ui = {
+  levelName: document.getElementById('levelName'),
+  time: document.getElementById('time'),
+  meat: document.getElementById('meat'),
+  stone: document.getElementById('stone'),
+  wood: document.getElementById('wood'),
+  fiber: document.getElementById('fiber'),
+  clay: document.getElementById('clay'),
+  livestock: document.getElementById('livestock'),
+  crafted: document.getElementById('crafted'),
+  spears: document.getElementById('spears'),
+  lives: document.getElementById('lives'),
+  startBtn: document.getElementById('startBtn'),
+  pauseBtn: document.getElementById('pauseBtn'),
+  easyBtn: document.getElementById('easyBtn'),
+  craftBtn: document.getElementById('craftBtn'),
+};
+
+// ===== Entités
+class Player { constructor(x,y){ this.x=x; this.y=y; this.r=16; this.speed=CONFIG.playerSpeed; this.vx=0; this.vy=0; this.spears=CONFIG.spearMax; this.sinceRecharge=0; this.invincible=0; this.warm=false; this.hides=0; }
+  update(dt){ this.x+=this.vx*this.speed*dt; this.y+=this.vy*this.speed*dt; this.x=clamp(this.x,this.r,canvas.width-this.r); this.y=clamp(this.y,220,canvas.height-this.r); this.sinceRecharge+=dt; if(this.sinceRecharge>=CONFIG.spearRecharge&&this.spears<CONFIG.spearMax){this.spears++; this.sinceRecharge=0;} if(this.invincible>0)this.invincible-=dt; }
+  draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.globalAlpha=.25; ctx.beginPath(); ctx.ellipse(0,this.r,this.r*.9,this.r*.4,0,0,Math.PI*2); ctx.fillStyle='#1b2a3b'; ctx.fill(); ctx.globalAlpha=1; ctx.beginPath(); ctx.moveTo(0,-this.r); ctx.lineTo(this.r*.9,this.r); ctx.lineTo(-this.r*.9,this.r); ctx.closePath(); ctx.fillStyle=this.warm?'#8d6e63':'#7a5230'; ctx.fill(); ctx.beginPath(); ctx.arc(0,-this.r*1.2,this.r*.55,0,Math.PI*2); ctx.fillStyle='#d7b49e'; ctx.fill(); ctx.strokeStyle='#bfa56b'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-8,-this.r*1.4); ctx.lineTo(18,this.r*.8); ctx.stroke(); if(this.invincible>0){ ctx.strokeStyle='#ffeb3b'; ctx.lineWidth=3; ctx.strokeRect(-this.r-2,-this.r*1.6,this.r*2+4,this.r*2.2+4);} ctx.restore(); } }
+
+class Bison { constructor(x,y,dir,speed){ this.x=x; this.y=y; this.w=46; this.h=28; this.dir=dir; this.speed=speed*(1+Math.random()*0.5); this.tagged=false; this.escapeTimer=0; }
+  update(dt){ if(!this.tagged){ this.x+=this.dir*this.speed*dt*(1+(CONFIG.difficulty*.4)); if(this.x<-60)this.x=canvas.width+60; if(this.x>canvas.width+60)this.x=-60; } else { this.escapeTimer+=dt; if(this.escapeTimer>.6)this.remove=true; } }
+  draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.globalAlpha=.25; ctx.fillStyle='#1b2a3b'; ctx.beginPath(); ctx.ellipse(0,this.h*.6,this.w*.5,this.h*.25,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; ctx.fillStyle=this.tagged?'#7cb342':'#5a3d2e'; roundRect(-this.w/2,-this.h/2,this.w,this.h,6,'fill'); ctx.fillStyle=this.tagged?'#9ccc65':'#6d4c41'; roundRect(this.dir>0?this.w/2-12:-this.w/2-18,-this.h/2-2,18,18,4,'fill'); ctx.strokeStyle='#e8e0cf'; ctx.lineWidth=3; ctx.beginPath(); const hornX=this.dir>0?this.w/2-6:-this.w/2-6; ctx.moveTo(hornX,-this.h/2-2); ctx.quadraticCurveTo(hornX+(this.dir>0?10:-10),-this.h/2-12,hornX,-this.h/2-6); ctx.stroke(); ctx.restore(); }
+  get rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; } }
+
+class Sheep { constructor(x,y){ this.x=x; this.y=y; this.w=28; this.h=18; this.tamed=false; this.remove=false; this.vx=(Math.random()<0.5?-1:1)*0.4; }
+  update(dt,player){ if(!this.tamed){ this.x+=this.vx*dt*60*(0.5+Math.random()*0.2); if(this.x<20||this.x>canvas.width-20)this.vx*=-1; if(rectHit({x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h},{x:player.x-16,y:player.y-16,w:32,h:32})) this.tamed=true; } else { const dx=player.x-this.x, dy=player.y-this.y; this.x+=Math.sign(dx)*0.9*dt*60; this.y+=Math.sign(dy)*0.6*dt*60; } }
+  draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle=this.tamed?'#fff8cc':'#f1f1f1'; roundRect(-this.w/2,-this.h/2,this.w,this.h,6,'fill'); ctx.fillStyle='#8d6e63'; roundRect(-this.w/2-8,-this.h/2+2,12,12,3,'fill'); ctx.restore(); }
+  get rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; } }
+
+class Spear { constructor(x,y,dir){ this.x=x; this.y=y; this.dir=dir; this.speed=5; this.lifetime=0; } update(dt){ this.x+=this.dir*this.speed*dt; this.lifetime+=dt; if(this.x<-20||this.x>canvas.width+20||this.lifetime>3) this.remove=true; } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.dir>0?0:Math.PI); ctx.strokeStyle='#d7c27a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.stroke(); ctx.fillStyle='#cfd8dc'; ctx.beginPath(); ctx.moveTo(12,0); ctx.lineTo(6,-4); ctx.lineTo(6,4); ctx.closePath(); ctx.fill(); ctx.restore(); } }
+
+class Rock { constructor(x,y){ this.x=x; this.y=y; this.r=12+Math.random()*12; } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#7b8a8f'; ctx.beginPath(); ctx.arc(0,0,this.r,0,Math.PI*2); ctx.fill(); ctx.restore(); } get rect(){ return {x:this.x-this.r,y:this.y-this.r,w:this.r*2,h:this.r*2}; } }
+
+class StonePickup { constructor(x,y){ this.x=x; this.y=y; this.r=10; this.remove=false; } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#9aa4a9'; ctx.beginPath(); ctx.arc(0,0,this.r,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#cbd5db'; ctx.stroke(); ctx.restore(); } get rect(){ return {x:this.x-this.r,y:this.y-this.r,w:this.r*2,h:this.r*2}; } }
+class WoodPickup { constructor(x,y){ this.x=x; this.y=y; this.w=22; this.h=10; this.remove=false; } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#8b5a3c'; roundRect(-this.w/2,-this.h/2,this.w,this.h,3,'fill'); ctx.strokeStyle='#caa07c'; ctx.strokeRect(-this.w/2,-this.h/2,this.w,this.h); ctx.restore(); } get rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; } }
+class FiberPickup { constructor(x,y){ this.x=x; this.y=y; this.w=18; this.h=12; this.remove=false; } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#b1c94a'; roundRect(-this.w/2,-this.h/2,this.w,this.h,3,'fill'); ctx.strokeStyle='#e6ef99'; ctx.strokeRect(-this.w/2,-this.h/2,this.w,this.h); ctx.restore(); } get rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; } }
+class ClayPickup { constructor(x,y){ this.x=x; this.y=y; this.w=18; this.h=12; this.remove=false; } draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#b46a3a'; roundRect(-this.w/2,-this.h/2,this.w,this.h,3,'fill'); ctx.strokeStyle='#e7a880'; ctx.strokeRect(-this.w/2,-this.h/2,this.w,this.h); ctx.restore(); } get rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; } }
+
+// ===== État du jeu
+let game=null, levelIndex=0, quiz=null;
+let narrative = { active:true, idx:0 }; // start with intro
 const keys = new Set();
 
-function resize(){
-  const rect = canvas.getBoundingClientRect();
-  const ratio = window.devicePixelRatio || 1;
-  canvas.width = Math.round(rect.width * ratio);
-  canvas.height = Math.round(rect.height * ratio);
-}
-new ResizeObserver(resize).observe(canvas);
-resize(); // IMPORTANT : premier appel immédiat
+// ===== Gestion clavier (bloque le scroll + marche même si bouton focus)
+['keydown','keypress'].forEach(type=>document.addEventListener(type,(e)=>{
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Enter'].includes(e.code)) e.preventDefault();
+}, {passive:false}));
+window.addEventListener('keydown', handleKey, {passive:false});
+document.addEventListener('keydown', handleKey, {passive:false});
+document.body.addEventListener('keydown', handleKey, {passive:false});
 
-// Empêcher la page de capter les flèches (scroll)
-addEventListener('keydown', (e)=>{
+function handleKey(e){
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  // narration prioritaire
+  if (narrative.active && (e.code==='Enter' || e.code==='Space')){ advanceNarrative(); return; }
   keys.add(e.code);
-});
-addEventListener('keyup', (e)=> keys.delete(e.code));
+  if (quiz && quiz.active){
+    if(e.code==='Digit1') answerQuiz(0);
+    if(e.code==='Digit2') answerQuiz(1);
+    if(e.code==='Digit3') answerQuiz(2);
+  }
+}
+window.addEventListener('keyup', e=> keys.delete(e.code));
 
-document.getElementById('startBtn').addEventListener('click', ()=>{ running=true; last=performance.now(); loop(); info("Démarré : appuie sur les flèches/WASD."); });
-document.getElementById('pauseBtn').addEventListener('click', ()=>{ running=!running; if(running){ last=performance.now(); loop(); } });
+// Clic n'importe où pour avancer la narration
+document.addEventListener('click', ()=>{ if(narrative.active) advanceNarrative(); });
 
-function loop(){
-  if(!running) return;
-  const t=performance.now(), dt=(t-last)/16.67; last=t;
-  // input
-  const up=keys.has('ArrowUp')||keys.has('KeyW');
-  const down=keys.has('ArrowDown')||keys.has('KeyS');
-  const left=keys.has('ArrowLeft')||keys.has('KeyA');
-  const right=keys.has('ArrowRight')||keys.has('KeyD');
-  player.vx = (right?1:0) - (left?1:0);
-  player.vy = (down?1:0) - (up?1:0);
-  player.x += player.vx * player.speed * dt;
-  player.y += player.vy * player.speed * dt;
-  player.x = Math.max(player.r, Math.min(canvas.width-player.r, player.x));
-  player.y = Math.max(220, Math.min(canvas.height-player.r, player.y));
-  // draw
-  ctx.fillStyle = '#a4d2ff'; ctx.fillRect(0,0,canvas.width,240);
-  ctx.fillStyle = '#86c06a'; ctx.fillRect(0,240,canvas.width,canvas.height-240);
-  drawPlayer();
-  requestAnimationFrame(loop);
+// ===== Démarrage
+ui.startBtn.addEventListener('click', ()=>{ start(); canvas.focus(); });
+ui.pauseBtn.addEventListener('click', ()=> togglePause());
+ui.easyBtn.addEventListener('click', ()=> setDifficulty());
+ui.craftBtn.addEventListener('click', ()=> craftClothes());
+
+// ===== Boucle
+function initLevel(index){
+  const L = LEVELS[index];
+  const groundY = 220, padding = 40;
+  const herd=[], rocks=[], spears=[], stones=[], woods=[], fibers=[], clays=[], sheep=[];
+  for(let i=0;i<L.herdSize;i++){ herd.push(new Bison(rand(padding, canvas.width-padding), rand(groundY+40, canvas.height-40), Math.random()<0.5?-1:1, L.bisonSpeed)); }
+  for(let i=0;i<CONFIG.rocks;i++){ rocks.push(new Rock(rand(padding, canvas.width-padding), rand(groundY+20, canvas.height-30))); }
+  for(let i=0;i<L.stones;i++){ stones.push(new StonePickup(rand(padding, canvas.width-padding), rand(groundY+30, canvas.height-40))); }
+  for(let i=0;i<L.woods;i++){ woods.push(new WoodPickup(rand(padding, canvas.width-padding), rand(groundY+30, canvas.height-40))); }
+  for(let i=0;i<L.fibers;i++){ fibers.push(new FiberPickup(rand(padding, canvas.width-padding), rand(groundY+30, canvas.height-40))); }
+  for(let i=0;i<L.clays;i++){ clays.push(new ClayPickup(rand(padding, canvas.width-padding), rand(groundY+30, canvas.height-40))); }
+  for(let i=0;i<L.sheep;i++){ sheep.push(new Sheep(rand(padding, canvas.width-padding), rand(groundY+30, canvas.height-60))); }
+
+  const pen = L.pen || null;
+  const workshop = L.workshop || null;
+
+  game = {
+    running:false, paused:false, t0:now(),
+    player: new Player(canvas.width/2, canvas.height-70),
+    herd, rocks, spears, stones, woods, fibers, clays, sheep,
+    resources:{ meat:0, stone:0, wood:0, fiber:0, clay:0, livestock:0, crafted:0 },
+    time: L.duration, lives:3, lastTime: now(),
+    direction:1, coldTick:0, level:L, pen, workshop, spearsArr:[]
+  };
+  ui.levelName.textContent = `${index+1}/4 — ${L.name}`;
+  updateHUD();
+  drawEverything(0);
 }
 
-function drawPlayer(){
-  ctx.save(); ctx.translate(player.x, player.y);
-  ctx.globalAlpha=.25; ctx.beginPath(); ctx.ellipse(0, player.r, player.r*.9, player.r*.4, 0, 0, Math.PI*2); ctx.fillStyle='#1b2a3b'; ctx.fill(); ctx.globalAlpha=1;
-  ctx.beginPath(); ctx.moveTo(0,-player.r); ctx.lineTo(player.r*.9,player.r); ctx.lineTo(-player.r*.9,player.r); ctx.closePath();
-  ctx.fillStyle='#7a5230'; ctx.fill();
-  ctx.beginPath(); ctx.arc(0,-player.r*1.2, player.r*.55, 0, Math.PI*2); ctx.fillStyle = '#d7b49e'; ctx.fill();
+function start(){ levelIndex=0; quiz=null; initLevel(levelIndex); narrative.active=true; narrative.idx=0; drawNarrative(); }
+function togglePause(){ if(!game) return; game.paused=!game.paused; if(!game.paused){ game.lastTime=now(); loop(); } }
+function setDifficulty(){ const map=['Facile','Normal','Difficile']; CONFIG.difficulty=(CONFIG.difficulty+1)%3; ui.easyBtn.textContent='Difficulté : '+map[CONFIG.difficulty]; if(game) initLevel(levelIndex); }
+
+function craftClothes(){
+  if(!game) return;
+  const p=game.player, r=game.resources;
+  if (p.warm) return;
+  if (p.hides>=2 && r.fiber>=2){
+    p.warm = true; r.fiber -= 2; p.hides -= 2; game.lives = Math.min(5, game.lives+1);
+    flashMessage("Vêtements : +1 vie, protection contre le froid.");
+    updateHUD();
+  } else { flashMessage("Il faut 2 peaux et 2 fibres pour des vêtements."); }
+}
+
+function shoot(){
+  if(!game || !game.running || game.paused) return;
+  const p=game.player; if(p.spears>0){ const dir=game.direction||1; game.spearsArr.push({x:p.x+dir*20, y:p.y-10, dir, speed:5, life:0}); p.spears--; p.sinceRecharge=0; updateHUD(); }
+}
+
+function update(dt){
+  const p = game.player;
+  const up = keys.has('ArrowUp')||keys.has('KeyW');
+  const down = keys.has('ArrowDown')||keys.has('KeyS');
+  const left = keys.has('ArrowLeft')||keys.has('KeyA');
+  const right = keys.has('ArrowRight')||keys.has('KeyD');
+  p.vx = (right?1:0) - (left?1:0); p.vy = (down?1:0) - (up?1:0);
+  if (p.vx!==0) game.direction = Math.sign(p.vx);
+  p.update(dt*60);
+
+  game.spearsArr.forEach(s=>{ s.x += s.dir * s.speed * dt*60; s.life+=dt; });
+  game.spearsArr = game.spearsArr.filter(s=> s.x>-20 && s.x<canvas.width+20 && s.life<3);
+
+  game.herd.forEach(b=> b.update(dt*60));
+  game.sheep.forEach(sh=> sh.update(dt,p));
+
+  if (game.level.cold && !p.warm){
+    game.coldTick += dt;
+    if (game.coldTick>3){ game.coldTick=0; game.lives--; flashMessage("Froid mordant : fabrique des vêtements !"); if (game.lives<=0){ return end(false); } }
+  }
+
+  // collisions ramassages (simplifiées)
+  const pr = {x:p.x-16,y:p.y-16,w:32,h:32};
+  game.stones.forEach(o=>{ if(!o.remove && rectHit(pr,o.rect)) {o.remove=true; game.resources.stone++;}});
+  game.woods.forEach(o=>{ if(!o.remove && rectHit(pr,o.rect)) {o.remove=true; game.resources.wood++;}});
+  game.fibers.forEach(o=>{ if(!o.remove && rectHit(pr,o.rect)) {o.remove=true; game.resources.fiber++;}});
+  game.clays.forEach(o=>{ if(!o.remove && rectHit(pr,o.rect)) {o.remove=true; game.resources.clay++;}});
+
+  // timer
+  game.time -= dt;
+  if (game.time<=0){ end(true); }
+
+  updateHUD();
+}
+
+function end(timeUp){
+  game.running=false;
+  const g = game.level.goals, r = game.resources;
+  const need = [];
+  if (r.meat < (g.meat||0)) need.push("nourriture");
+  if (r.stone < (g.stone||0)) need.push("pierre (outils)");
+  if (r.wood < (g.wood||0)) need.push("bois (feu/abri)");
+  if (r.fiber < (g.fiber||0)) need.push("fibres");
+  if (r.clay < (g.clay||0)) need.push("argile");
+  if ((g.livestock||0) > 0 && r.livestock < g.livestock) need.push("bétail dans l'enclos");
+  if ((g.crafted||0) > 0 && r.crafted < g.crafted) need.push("objets fabriqués");
+  if (g.craft && !game.player.warm) need.push("vêtements");
+  const ok = need.length===0;
+  overlay(ok? "Objectif atteint" : "Bilan – ce qui manque", ok? "Tu peux passer à l'étape suivante." : `Il manque : ${need.join(', ')}.`);
+  if (ok){
+    if (levelIndex < LEVELS.length-1){
+      narrative.active = true; narrative.idx = levelIndex+1; drawNarrative();
+    } else {
+      narrative.active = true; narrative.idx = NARRATION.length-1; drawNarrative(true);
+    }
+  }
+}
+
+function nextLevel(){ if (levelIndex < LEVELS.length-1){ levelIndex++; initLevel(levelIndex); game.running=true; game.paused=false; } }
+
+function drawEverything(t){
+  const L = game.level; L.drawBG(ctx, canvas.width, canvas.height, t);
+  const floors = ['#a7c7df','#9ec27a','#7cc38e','#cbbf8c']; ctx.fillStyle=floors[levelIndex]||'#86c06a'; ctx.fillRect(0,260,canvas.width,280);
+  // décor spéciaux
+  if (levelIndex===1 && game.level.pen){ const p = game.level.pen; ctx.fillStyle='rgba(139,90,60,0.35)'; ctx.fillRect(p.x,p.y,p.w,p.h); ctx.strokeStyle='#8b5a3c'; ctx.lineWidth=3; ctx.strokeRect(p.x,p.y,p.w,p.h); for(let i=0;i<6;i++){ ctx.fillStyle='#8b5a3c'; ctx.fillRect(p.x+10+i*20,p.y-8,4,12); } }
+  if (levelIndex===2 && game.level.workshop){ const w = game.level.workshop; ctx.fillStyle='#c89b6d'; roundRect(w.x,w.y,w.w,w.h,10,'fill'); ctx.fillStyle='#8b5a3c'; ctx.beginPath(); ctx.moveTo(w.x, w.y); ctx.lineTo(w.x+w.w/2, w.y-28); ctx.lineTo(w.x+w.w, w.y); ctx.closePath(); ctx.fill(); ctx.fillStyle='#7d4f2a'; roundRect(w.x+w.w+12,w.y+22,38,26,8,'fill'); ctx.fillStyle='#ff6a00'; ctx.globalAlpha=.8; roundRect(w.x+w.w+18,w.y+30,26,10,4,'fill'); ctx.globalAlpha=1; ctx.fillStyle='rgba(0,0,0,.5)'; roundRect(w.x+10,w.y-38, w.w-20, 20, 6,'fill'); ctx.fillStyle='white'; ctx.font='12px system-ui'; ctx.textAlign='center'; ctx.fillText('ATELIER', w.x + w.w/2, w.y-23); }
+  // entités visibles (ramassables)
+  game.stones.filter(o=>!o.remove).forEach(s=> s.draw());
+  game.woods.filter(o=>!o.remove).forEach(w=> w.draw());
+  game.fibers.filter(o=>!o.remove).forEach(f=> f.draw());
+  game.clays.filter(o=>!o.remove).forEach(f=> f.draw());
+  game.herd.forEach(b=> b.draw());
+  game.sheep.forEach(sh=> sh.draw());
+  game.rocks.forEach(r=> r.draw());
+  game.spearsArr.forEach(s=>{ ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(s.dir>0?0:Math.PI); ctx.strokeStyle='#d7c27a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.stroke(); ctx.fillStyle='#cfd8dc'; ctx.beginPath(); ctx.moveTo(12,0); ctx.lineTo(6,-4); ctx.lineTo(6,4); ctx.closePath(); ctx.fill(); ctx.restore(); });
+  game.player.draw();
+}
+
+// ===== HUD / outils
+function updateHUD(){ if(!game) return; ui.time.textContent=Math.max(0,Math.ceil(game.time)); ui.meat.textContent=game.resources.meat; ui.stone.textContent=game.resources.stone; ui.wood.textContent=game.resources.wood; ui.fiber.textContent=game.resources.fiber; ui.clay.textContent=game.resources.clay; ui.livestock.textContent=game.resources.livestock; ui.crafted.textContent=game.resources.crafted; ui.spears.textContent=game.player.spears; ui.lives.textContent=game.lives; }
+
+function loop(){ if (!game || !game.running) return; const t=now(); if(!game.paused){ const dt=(t-game.lastTime)/1000; update(dt); drawEverything(t-game.t0); game.lastTime=t; requestAnimationFrame(loop); } }
+
+function rectHit(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+function roundRect(x,y,w,h,r,mode){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); if(mode==='fill') ctx.fill(); else ctx.stroke(); }
+
+// ===== Peintres d'arrière-plan
+function drawCloud(ctx,x,y,scale){ ctx.save(); ctx.translate(x,y); ctx.scale(scale,scale); ctx.fillStyle='rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.arc(16,4,14,0,Math.PI*2); ctx.arc(-16,6,12,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+function drawAlpine(ctx,w,h,t){ ctx.fillStyle = '#a4d2ff'; ctx.fillRect(0,0,w,240); for(let i=0;i<6;i++){ drawCloud(ctx,(t*0.03 + i*180)% (w+200)-100, 60+ (i%2)*20, 1+(i%3)*0.1); } ctx.fillStyle='#7aa3c8'; ctx.beginPath(); ctx.moveTo(0,220); for(let x=0;x<=w;x+=60){ const peak = 220 - 50 - 40*Math.sin((x+t*0.0008)*0.01); ctx.lineTo(x,peak); } ctx.lineTo(w,220); ctx.closePath(); ctx.fill(); ctx.fillStyle='#e7f2fb'; ctx.fillRect(0,240,w,24); }
+function drawPastoral(ctx,w,h,t){ ctx.fillStyle = '#bfe3a1'; ctx.fillRect(0,0,w,220); for(let i=0;i<5;i++){ drawCloud(ctx,(t*0.04 + i*220)% (w+220)-110, 70+ (i%2)*26, 1.1); } ctx.fillStyle='#8fc07a'; ctx.beginPath(); ctx.moveTo(0,220); for(let x=0;x<=w;x+=60){ ctx.lineTo(x, 220 - 20 - 14*Math.sin((x+t*0.0007)*0.015)); } ctx.lineTo(w,220); ctx.closePath(); ctx.fill(); }
+function drawWorkshopVillage(ctx,w,h,t){ ctx.fillStyle = '#bfe3ff'; ctx.fillRect(0,0,w,220); for(let i=0;i<5;i++){ drawCloud(ctx,(t*0.03 + i*220)% (w+220)-110, 70+ (i%2)*20, 1.1); } for(let i=0;i<8;i++){ const x=(i*110+ (w*0.15))%w; ctx.fillStyle='#316b3f'; ctx.fillRect(x,200,16,40); ctx.beginPath(); ctx.fillStyle='#4aa26c'; ctx.arc(x+8,190,24,0,Math.PI*2); ctx.fill(); } ctx.fillStyle='#5bb6f5'; ctx.fillRect(0,240,w,16); }
+function drawFertileCrescent(ctx,w,h,t){ ctx.fillStyle = '#f5e6b2'; ctx.fillRect(0,0,w,220); ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.arc(90,70,24,0,Math.PI*2); ctx.fill(); for(let i=0;i<6;i++){ ctx.fillStyle = i%2? '#b4d97a' : '#d6c877'; ctx.fillRect(i*(w/6),220-20, w/6, 20); } for(let i=0;i<4;i++){ const x=140+i*180; ctx.fillStyle='#c89b6d'; roundRect(x,185,44,28,6,'fill'); ctx.fillStyle='#8b5a3c'; ctx.beginPath(); ctx.moveTo(x,185); ctx.lineTo(x+22,168); ctx.lineTo(x+44,185); ctx.closePath(); ctx.fill(); } ctx.fillStyle='#5bb6f5'; ctx.fillRect(0,240,w,14); }
+function drawFinalPanorama(ctx,w,h,t){ drawAlpine(ctx,w/2,h/2,t); ctx.save(); ctx.translate(w/2,0); drawPastoral(ctx,w/2,h/2,t); ctx.restore(); ctx.save(); ctx.translate(0,h/2); drawWorkshopVillage(ctx,w/2,h/2,t); ctx.restore(); ctx.save(); ctx.translate(w/2,h/2); drawFertileCrescent(ctx,w/2,h/2,t); ctx.restore(); }
+
+// ===== Narration
+function drawNarrative(isEpilogue=false){
+  const slide = NARRATION[narrative.idx];
+  slide.painter(ctx, canvas.width, canvas.height, (now()/1000));
+  ctx.fillStyle='rgba(0,0,0,.58)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='rgba(16,26,40,.9)'; roundRect(canvas.width/2-360, canvas.height/2-150, 720, 220, 14, 'fill');
+  ctx.fillStyle='white'; ctx.textAlign='center';
+  ctx.font='bold 28px system-ui'; ctx.fillText(slide.title, canvas.width/2, canvas.height/2 - 100);
+  ctx.font='16px system-ui'; slide.lines.forEach((ln,i)=> ctx.fillText(ln, canvas.width/2, canvas.height/2 - 40 + i*24));
+  const text = isEpilogue? "Commencer le QCM (Entrée ou clic)" : "Commencer le niveau (Entrée ou clic)";
+  ctx.fillStyle='#1f6feb'; roundRect(canvas.width/2-150, canvas.height/2+60, 300, 40, 10, 'fill');
+  ctx.fillStyle='white'; ctx.font='bold 16px system-ui'; ctx.fillText(text, canvas.width/2, canvas.height/2+86);
+}
+function advanceNarrative(){
+  if (narrative.idx === NARRATION.length-1){ narrative.active=false; showQuiz(); return; }
+  const toStartLevel = narrative.idx; narrative.active=false;
+  if (!game || levelIndex!==toStartLevel){ levelIndex = toStartLevel; initLevel(levelIndex); }
+  game.running=true; game.paused=false; game.lastTime=now(); loop();
+}
+
+// ===== Overlay & messages
+function overlay(title, text){
+  ctx.save(); ctx.fillStyle='rgba(0,0,0,.58)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='white'; ctx.textAlign='center';
+  ctx.font='bold 34px system-ui'; ctx.fillText(title, canvas.width/2, canvas.height/2 - 30);
+  ctx.font='16px system-ui'; const lines = (text||'').split('\n'); lines.forEach((ln,i)=> ctx.fillText(ln, canvas.width/2, canvas.height/2 + i*22));
+  ctx.font='14px system-ui'; ctx.fillText('Entrée/clic pour continuer, Lancer/Rejouer pour redémarrer', canvas.width/2, canvas.height/2 + 22*lines.length + 28);
   ctx.restore();
 }
+let flash=0, flashText=''; function flashMessage(txt){ flash=1.8; flashText=txt; }
+const _fillText=(text,x,y)=>ctx.fillText(text,x,y);
+function drawFlash(){ if(flash>0){ flash -= 0.03; ctx.save(); ctx.globalAlpha=Math.max(0,Math.min(1,flash)); ctx.fillStyle='rgba(0,0,0,.6)'; roundRect(canvas.width/2-320,24,640,40,8,'fill'); ctx.fillStyle='white'; ctx.textAlign='center'; ctx.font='bold 16px system-ui'; _fillText(flashText, canvas.width/2, 50); ctx.restore(); } }
+(function patchLoop(){ const _req=window.requestAnimationFrame; window.requestAnimationFrame=function(fn){ return _req(function(t){ fn(t); if(narrative.active) drawNarrative(narrative.idx===NARRATION.length-1); drawFlash(); }); } })();
 
-function info(text){
-  ctx.save();
-  ctx.fillStyle='rgba(0,0,0,.6)';
-  ctx.fillRect(10,10, canvas.width-20, 40);
-  ctx.fillStyle='white';
-  ctx.font='16px system-ui';
-  ctx.textAlign='center';
-  ctx.fillText(text, canvas.width/2, 36);
-  ctx.restore();
-}
+// ===== QCM minimal
+const QUIZ_POOL=[
+  { q:"Pourquoi l’élevage change la vie des hommes ?", a:["Nourriture plus régulière","Supprime les outils","Supprime le feu"], i:0 },
+  { q:"La poterie sert surtout à…", a:["Stocker/cuire des aliments","Remplacer la pierre","Faire fuir les prédateurs"], i:0 },
+  { q:"La sédentarisation signifie…", a:["S’installer durablement","Se déplacer sans arrêt","Vivre isolé"], i:0 },
+];
+function pickQuiz(n=3){ const pool=[...QUIZ_POOL]; const out=[]; for(let i=0;i<n;i++){ const k=Math.floor(Math.random()*pool.length); out.push(pool.splice(k,1)[0]); } return out; }
+let quiz=null;
+function showQuiz(){ quiz={active:true,idx:0,score:0,qs:pickQuiz()}; drawQuiz(); }
+function answerQuiz(choice){ const it=quiz.qs[quiz.idx]; if(choice===it.i){ quiz.score++; flashMessage("✅ Bonne réponse"); } else { flashMessage("❌ Mauvaise réponse"); } quiz.idx++; if(quiz.idx>=quiz.qs.length){ overlay("Bravo !", `Score QCM : ${quiz.score}/${quiz.qs.length}.`); quiz.active=false; } else drawQuiz(); }
+function drawQuiz(){ const it=quiz.qs[quiz.idx]; const lines=[it.q,"",`1) ${it.a[0]}`,`2) ${it.a[1]}`,`3) ${it.a[2]}`,"","Réponds avec 1, 2 ou 3."]; overlay("QCM – Révise le Néolithique", lines.join("\n")); }
+document.addEventListener('keydown', e=>{ if(quiz&&quiz.active){ if(e.code==='Digit1')answerQuiz(0); if(e.code==='Digit2')answerQuiz(1); if(e.code==='Digit3')answerQuiz(2); } });
 
-// Message initial
-info("Clique sur Lancer puis bouge avec les flèches/WASD. Si rien ne bouge, vérifie que la page n'est pas en train de défiler.");
+// ===== Resize initial (important)
+function doResize(){ const rect = canvas.getBoundingClientRect(); const ratio = window.devicePixelRatio || 1; canvas.width = Math.round(rect.width*ratio); canvas.height = Math.round(rect.height*ratio); if(game) drawEverything(0); }
+new ResizeObserver(doResize).observe(canvas); doResize();
+
+// ===== Boot overlay
+overlay("Appuie sur Lancer / Rejouer","Puis Entrée/clic pour passer les écrans narratifs.");
 </script>
 </body>
 </html>
