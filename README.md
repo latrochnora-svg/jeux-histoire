@@ -1,4 +1,4 @@
-# Ötzi – Campement avant la nuit (version pédagogique 6e)
+# Ötzi – Campement avant la nuit 
 
 Jeu HTML5 pour aborder le thème des débuts de l’humanité en 6e.
 
