@@ -1,14 +1,14 @@
 # Ötzi – Chasse au bison
 
-Jeu pédagogique en HTML5 créé pour les élèves de Mme Latroch dans le cadre de cours d'histoire.
+Jeu HTML5 (canvas) pour un usage pédagogique en histoire-géographie.
 
-## Objectif
-Incarner Ötzi, l’homme des glaces, et marquer des bisons avec des javelots pour nourrir le clan.
+## Jouer
+Ouvrir `index.html` dans un navigateur ou publier ce dossier via **GitHub Pages** (branch `main`, dossier `/root`).
 
 ## Commandes
-- **Flèches directionnelles** ou **WASD** : se déplacer  
-- **Espace** : lancer un javelot  
-- **P** : mettre en pause
+- Flèches / WASD : se déplacer
+- Espace : lancer un javelot
+- P : pause
 
----
-Créé avec ❤️ pour l'apprentissage ludique de la préhistoire.
+## Paramètres modifiables
+Dans le script, la constante `CONFIG` permet d'ajuster la durée, le nombre et la vitesse des bisons, etc.
