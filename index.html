@@ -3,28 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ötzi – Chasse au bison</title>
+  <title>Ötzi – Campement avant la nuit</title>
   <style>
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0e141b; color:#e8eef6; }
     .wrap { display:flex; flex-direction:column; align-items:center; gap:12px; padding:18px; }
-    canvas { background: linear-gradient(#a4d2ff 0 45%, #e6f6ff 45% 46%, #b7e1a1 46% 100%); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); width: min(920px, 92vw); height: calc(min(920px, 92vw) * 0.56); image-rendering: pixelated; }
+    canvas { background: linear-gradient(#a4d2ff 0 45%, #e6f6ff 45% 46%, #b7e1a1 46% 100%); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); width: min(960px, 94vw); height: calc(min(960px, 94vw) * 0.56); image-rendering: pixelated; }
     .hud { display:flex; gap:16px; flex-wrap:wrap; align-items:center; justify-content:center; font-weight:600; }
     .btns { display:flex; gap:8px; flex-wrap:wrap; }
     button { padding:10px 14px; border-radius:10px; border:0; background:#1f6feb; color:white; font-weight:700; cursor:pointer; box-shadow: 0 4px 14px rgba(31,111,235,.35);} 
     button.secondary{ background:#2b3950; }
     .tip { font-size:14px; opacity:.9 }
     .kbd { padding:2px 6px; border-radius:6px; background:#223049; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    details { max-width: min(920px, 92vw); background:#101a28; padding:12px 14px; border-radius:12px; }
-    summary { cursor:pointer; font-weight:700; }
+    .intro { max-width:min(960px,94vw); background:#101a28; border-radius:12px; padding:12px 14px; }
+    .intro h2 { margin:0 0 6px 0; font-size:18px; }
+    .intro p { margin:6px 0; line-height:1.4; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Ötzi – Chasse au bison</h1>
+    <h1>Ötzi – Campement avant la nuit</h1>
+    <div class="intro">
+      <h2>Objectif pédagogique</h2>
+      <p>Thème de 6e : les débuts de l’humanité. Tu dois rassembler ce qui est nécessaire à la survie d’un groupe avant la nuit :</p>
+      <ul>
+        <li>Nourriture : marquer des bisons avec des javelots.</li>
+        <li>Outils : récupérer des pierres.</li>
+        <li>Feu et abri : ramasser du bois.</li>
+      </ul>
+      <p>À la fin, un bilan explique ce qui a manqué et pourquoi.</p>
+    </div>
+
     <div class="hud">
-      <div>Points : <span id="score">0</span></div>
-      <div>Temps : <span id="time">60</span>s</div>
-      <div>Bisons restants : <span id="bisons">0</span></div>
+      <div>Temps : <span id="time">90</span>s</div>
+      <div>Nourriture : <span id="meat">0</span></div>
+      <div>Outils : <span id="stone">0</span></div>
+      <div>Bois : <span id="wood">0</span></div>
       <div>Javelots : <span id="spears">3</span></div>
       <div>Vies : <span id="lives">3</span></div>
       <div class="btns">
@@ -33,287 +46,318 @@
         <button id="easyBtn" class="secondary">Niveau : Normal</button>
       </div>
     </div>
-    <canvas id="game" width="960" height="540" aria-label="Jeu de chasse préhistorique"></canvas>
-    <div class="tip">Commandes : <span class="kbd">← → ↑ ↓</span> ou <span class="kbd">W A S D</span> pour bouger • <span class="kbd">Espace</span> pour lancer un javelot • <span class="kbd">P</span> pour pause.</div>
 
-    <details>
-      <summary>Objectif et idées pédagogiques</summary>
-      <ul>
-        <li>Incarner Ötzi, l’homme des glaces, et « marquer » des bisons avec des javelots pour nourrir le clan (pas de violence graphique).</li>
-        <li>Éléments d’environnement : froid, cailloux, et mouvement de troupeau. Parler des contraintes naturelles et des techniques (mobilité, observation des troupeaux).</li>
-        <li>Paramètres modulables : nombre de bisons, durée, vitesse, recharge de javelots.</li>
-      </ul>
-    </details>
+    <canvas id="game" width="960" height="540" aria-label="Jeu de survie préhistorique"></canvas>
+    <div class="tip">Commandes : <span class="kbd">← → ↑ ↓</span> ou <span class="kbd">W A S D</span> pour bouger • <span class="kbd">Espace</span> pour lancer un javelot • <span class="kbd">P</span> pour pause.</div>
   </div>
 
-  <script>
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const rand = (a, b) => Math.random() * (b - a) + a;
-  const now = () => performance.now();
+<script>
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => Math.random() * (b - a) + a;
+const now = () => performance.now();
 
-  const CONFIG = {
-    duration: 60,
-    herdSize: 8,
-    bisonSpeed: 1.2,
-    playerSpeed: 2.2,
-    spearSpeed: 5.0,
-    spearMax: 3,
-    spearRecharge: 1.8,
-    hazardCount: 7,
-    difficulty: 1,
-  };
+// Paramètres didactiques
+const CONFIG = {
+  duration: 90,
+  herdSize: 6,
+  bisonSpeed: 1.2,
+  playerSpeed: 2.2,
+  spearSpeed: 5.0,
+  spearMax: 3,
+  spearRecharge: 1.8,
+  hazardCount: 6,
+  difficulty: 1,
+  stones: 6,
+  woods: 6,
+  goals: { meat: 4, stone: 3, wood: 4 } // seuils pour bilan
+};
 
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const ui = {
-    score: document.getElementById('score'),
-    time: document.getElementById('time'),
-    bisons: document.getElementById('bisons'),
-    spears: document.getElementById('spears'),
-    lives: document.getElementById('lives'),
-    startBtn: document.getElementById('startBtn'),
-    pauseBtn: document.getElementById('pauseBtn'),
-    easyBtn: document.getElementById('easyBtn'),
-  };
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const ui = {
+  time: document.getElementById('time'),
+  meat: document.getElementById('meat'),
+  stone: document.getElementById('stone'),
+  wood: document.getElementById('wood'),
+  spears: document.getElementById('spears'),
+  lives: document.getElementById('lives'),
+  startBtn: document.getElementById('startBtn'),
+  pauseBtn: document.getElementById('pauseBtn'),
+  easyBtn: document.getElementById('easyBtn'),
+};
 
-  let game = null;
+let game = null;
 
-  class Player {
-    constructor(x, y){
-      this.x = x; this.y = y; this.r = 16; this.speed = CONFIG.playerSpeed;
-      this.vx = 0; this.vy = 0; this.spears = CONFIG.spearMax; this.sinceRecharge = 0;
-      this.invincible = 0;
-    }
-    update(dt){
-      this.x += this.vx * this.speed * dt; 
-      this.y += this.vy * this.speed * dt; 
-      this.x = clamp(this.x, this.r, canvas.width - this.r);
-      this.y = clamp(this.y, 220, canvas.height - this.r);
-
-      this.sinceRecharge += dt;
-      if (this.sinceRecharge >= CONFIG.spearRecharge && this.spears < CONFIG.spearMax){
-        this.spears++; this.sinceRecharge = 0; updateHUD();
-      }
-      if (this.invincible > 0) this.invincible -= dt;
-    }
-    draw(){
-      ctx.save();
-      ctx.translate(this.x, this.y);
-      ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.ellipse(0, this.r, this.r*0.9, this.r*0.4, 0, 0, Math.PI*2); ctx.fillStyle = '#1b2a3b'; ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.beginPath(); ctx.moveTo(0,-this.r); ctx.lineTo(this.r*0.9,this.r); ctx.lineTo(-this.r*0.9,this.r); ctx.closePath();
-      ctx.fillStyle = '#7a5230'; ctx.fill();
-      ctx.beginPath(); ctx.arc(0,-this.r*1.2, this.r*0.55, 0, Math.PI*2); ctx.fillStyle = '#d7b49e'; ctx.fill();
-      ctx.strokeStyle = '#bfa56b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-8, -this.r*1.4); ctx.lineTo(18, this.r*0.8); ctx.stroke();
-      if (this.invincible>0){ ctx.strokeStyle='#ffeb3b'; ctx.lineWidth=3; ctx.strokeRect(-this.r-2,-this.r*1.6,this.r*2+4,this.r*2.2+4); }
-      ctx.restore();
-    }
+class Player {
+  constructor(x, y){
+    this.x=x; this.y=y; this.r=16; this.speed=CONFIG.playerSpeed;
+    this.vx=0; this.vy=0; this.spears=CONFIG.spearMax; this.sinceRecharge=0;
+    this.invincible=0;
   }
-
-  class Bison {
-    constructor(x, y, dir){
-      this.x=x; this.y=y; this.w=46; this.h=28; this.dir=dir; this.speed=CONFIG.bisonSpeed * (1+Math.random()*0.5);
-      this.tagged=false; this.escapeTimer = 0;
+  update(dt){
+    this.x += this.vx * this.speed * dt;
+    this.y += this.vy * this.speed * dt;
+    this.x = clamp(this.x, this.r, canvas.width - this.r);
+    this.y = clamp(this.y, 220, canvas.height - this.r);
+    this.sinceRecharge += dt;
+    if (this.sinceRecharge >= CONFIG.spearRecharge && this.spears < CONFIG.spearMax){
+      this.spears++; this.sinceRecharge = 0;
     }
-    update(dt){
-      if (!this.tagged){
-        this.x += this.dir * this.speed * dt * (1 + (CONFIG.difficulty*0.4));
-        if (this.x < -60){ this.x = canvas.width + 60; }
-        if (this.x > canvas.width + 60){ this.x = -60; }
-      } else {
-        this.escapeTimer += dt; if (this.escapeTimer>0.6){ this.remove=true; }
-      }
-    }
-    draw(){
-      ctx.save(); ctx.translate(this.x, this.y);
-      ctx.globalAlpha=0.25; ctx.fillStyle='#1b2a3b'; ctx.beginPath(); ctx.ellipse(0,this.h*0.6,this.w*0.5,this.h*0.25,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
-      ctx.fillStyle = this.tagged? '#7cb342' : '#5a3d2e';
-      ctx.fillRect(-this.w/2,-this.h/2,this.w,this.h);
-      ctx.fillStyle = this.tagged? '#9ccc65' : '#6d4c41';
-      ctx.fillRect(this.dir>0? this.w/2-10 : -this.w/2-18, -this.h/2-2, 18, 18);
-      ctx.strokeStyle='#e8e0cf'; ctx.lineWidth=3; ctx.beginPath();
-      const hornX = this.dir>0? this.w/2-6 : -this.w/2-6; ctx.moveTo(hornX,-this.h/2-2); ctx.quadraticCurveTo(hornX+(this.dir>0?10:-10), -this.h/2-12, hornX, -this.h/2-6); ctx.stroke();
-      ctx.restore();
-    }
-    get rect(){ return {x:this.x-this.w/2, y:this.y-this.h/2, w:this.w, h:this.h}; }
+    if (this.invincible>0) this.invincible -= dt;
   }
-
-  class Spear {
-    constructor(x, y, dir){ this.x=x; this.y=y; this.dir=dir; this.speed=CONFIG.spearSpeed; this.lifetime=0; }
-    update(dt){ this.x += this.dir * this.speed * dt; this.lifetime += dt; if (this.x<-20||this.x>canvas.width+20||this.lifetime>3){ this.remove=true; } }
-    draw(){
-      ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.dir>0? 0 : Math.PI);
-      ctx.strokeStyle='#d7c27a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.stroke();
-      ctx.fillStyle='#cfd8dc'; ctx.beginPath(); ctx.moveTo(12,0); ctx.lineTo(6,-4); ctx.lineTo(6,4); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  class Rock {
-    constructor(x,y){ this.x=x; this.y=y; this.r=rand(12,24); }
-    draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#7b8a8f'; ctx.beginPath(); ctx.arc(0,0,this.r,0,Math.PI*2); ctx.fill(); ctx.restore(); }
-    get rect(){ return {x:this.x-this.r, y:this.y-this.r, w:this.r*2, h:this.r*2}; }
-  }
-
-  const keys = new Set();
-  addEventListener('keydown', e=>{ keys.add(e.code); if (e.code==='Space'){ e.preventDefault(); shoot(); } if (e.code==='KeyP'){ togglePause(); } });
-  addEventListener('keyup', e=> keys.delete(e.code));
-
-  function initGame(){
-    const groundY = 220;
-    const padding = 40;
-    const herd = []; const rocks=[]; const spears=[];
-    for (let i=0;i<CONFIG.herdSize;i++){
-      herd.push(new Bison(rand(padding, canvas.width-padding), rand(groundY+40, canvas.height-40), Math.random()<0.5? -1: 1));
-    }
-    for (let i=0;i<CONFIG.hazardCount;i++){
-      rocks.push(new Rock(rand(padding, canvas.width-padding), rand(groundY+20, canvas.height-30)));
-    }
-    game = {
-      running:false, paused:false,
-      player:new Player(canvas.width/2, canvas.height-70),
-      herd, rocks, spears,
-      score:0, time: CONFIG.duration, lives:3, lastTime: now(),
-      direction: 1
-    };
-    updateHUD(); drawEverything();
-  }
-
-  function start(){ initGame(); game.running=true; game.paused=false; loop(); }
-  function togglePause(){ if (!game) return; game.paused = !game.paused; if (!game.paused) { game.lastTime = now(); loop(); } }
-
-  function setDifficulty(){
-    const map = ['Facile','Normal','Difficile'];
-    CONFIG.difficulty = (CONFIG.difficulty+1)%3;
-    ui.easyBtn.textContent = 'Niveau : ' + map[CONFIG.difficulty];
-  }
-
-  function shoot(){
-    if (!game || !game.running || game.paused) return;
-    const p = game.player;
-    if (p.spears>0){
-      const dir = game.direction || 1;
-      game.spears.push(new Spear(p.x + dir*20, p.y-10, dir));
-      p.spears--; p.sinceRecharge=0; updateHUD();
-    }
-  }
-
-  function update(dt){
-    const p = game.player;
-    const up = keys.has('ArrowUp')||keys.has('KeyW');
-    const down = keys.has('ArrowDown')||keys.has('KeyS');
-    const left = keys.has('ArrowLeft')||keys.has('KeyA');
-    const right = keys.has('ArrowRight')||keys.has('KeyD');
-    p.vx = (right?1:0) - (left?1:0); p.vy = (down?1:0) - (up?1:0);
-    if (p.vx!==0) game.direction = Math.sign(p.vx);
-
-    p.update(dt*60);
-
-    game.spears.forEach(s=> s.update(dt*60));
-    game.herd.forEach(b=> b.update(dt*60));
-
-    for (const s of game.spears){
-      for (const b of game.herd){
-        if (!b.tagged && rectHit({x:s.x-6,y:s.y-2,w:12,h:4}, b.rect)){
-          b.tagged = true; game.score += 10; s.remove=true; updateHUD();
-        }
-      }
-    }
-
-    for (const b of game.herd){
-      if (!b.tagged && game.player.invincible<=0 && rectHit(b.rect, {x:p.x-p.r,y:p.y-p.r,w:p.r*2,h:p.r*2})){
-        game.lives--; game.player.invincible=2; updateHUD();
-        if (game.lives<=0){ end(false); }
-      }
-    }
-
-    for (const r of game.rocks){
-      if (rectHit(r.rect, {x:p.x-p.r,y:p.y-p.r,w:p.r*2,h:p.r*2})){
-        p.x -= p.vx * 6; p.y -= p.vy * 6;
-      }
-    }
-
-    game.spears = game.spears.filter(s=>!s.remove);
-    game.herd = game.herd.filter(b=>!b.remove);
-
-    game.time -= dt; if (game.time<=0){ end(true); }
-  }
-
-  function end(timeUp){
-    game.running=false;
-    const allTagged = game.herd.length===0;
-    const success = allTagged || (!timeUp && game.lives>0);
-    drawEverything();
-    overlay(success ? 'Victoire' : 'Fin de partie', success ? 'Le clan est nourri.' : 'Le clan a faim.');
-  }
-
-  function rectHit(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
-
-  function drawEverything(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    drawParallax();
-    game.rocks.forEach(r=> r.draw());
-    game.herd.forEach(b=> b.draw());
-    game.player.draw();
-    game.spears.forEach(s=> s.draw());
-  }
-
-  function drawParallax(){
-    ctx.fillStyle = '#6aa3cf';
-    ctx.beginPath();
-    ctx.moveTo(0,220);
-    for (let x=0;x<=canvas.width;x+=40){
-      const peak = 220 - 30 - 20*Math.sin(x*0.01);
-      ctx.lineTo(x, peak);
-    }
-    ctx.lineTo(canvas.width,220); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#e7f2fb';
-    ctx.globalAlpha=.65;
-    ctx.beginPath(); ctx.moveTo(0,240); ctx.lineTo(canvas.width,240); ctx.lineTo(canvas.width,260); ctx.lineTo(0,260); ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
-    ctx.fillStyle = '#86c06a'; ctx.fillRect(0,260,canvas.width,280);
-  }
-
-  function overlay(title, subtitle){
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle = 'white'; ctx.textAlign='center';
-    ctx.font = 'bold 42px system-ui'; ctx.fillText(title, canvas.width/2, canvas.height/2 - 10);
-    ctx.font = '18px system-ui'; ctx.fillText(subtitle || '', canvas.width/2, canvas.height/2 + 20);
-    ctx.font = '16px system-ui'; ctx.fillText('Appuyez sur « Lancer / Rejouer »', canvas.width/2, canvas.height/2 + 60);
+  draw(){
+    ctx.save(); ctx.translate(this.x, this.y);
+    ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.ellipse(0, this.r, this.r*0.9, this.r*0.4, 0, 0, Math.PI*2); ctx.fillStyle = '#1b2a3b'; ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.moveTo(0,-this.r); ctx.lineTo(this.r*0.9,this.r); ctx.lineTo(-this.r*0.9,this.r); ctx.closePath();
+    ctx.fillStyle = '#7a5230'; ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-this.r*1.2, this.r*0.55, 0, Math.PI*2); ctx.fillStyle = '#d7b49e'; ctx.fill();
+    ctx.strokeStyle = '#bfa56b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-8, -this.r*1.4); ctx.lineTo(18, this.r*0.8); ctx.stroke();
+    if (this.invincible>0){ ctx.strokeStyle='#ffeb3b'; ctx.lineWidth=3; ctx.strokeRect(-this.r-2,-this.r*1.6,this.r*2+4,this.r*2.2+4); }
     ctx.restore();
   }
+}
 
-  function updateHUD(){
-    if (!game) return;
-    ui.score.textContent = game.score;
-    ui.time.textContent = Math.max(0, Math.ceil(game.time));
-    ui.bisons.textContent = game.herd.filter(b=>!b.tagged).length;
-    ui.spears.textContent = game.player.spears;
-    ui.lives.textContent = game.lives;
+class Bison {
+  constructor(x,y,dir){
+    this.x=x; this.y=y; this.w=46; this.h=28; this.dir=dir; this.speed=CONFIG.bisonSpeed*(1+Math.random()*0.4);
+    this.tagged=false; this.escapeTimer=0;
   }
+  update(dt){
+    if (!this.tagged){
+      this.x += this.dir * this.speed * dt * (1 + (CONFIG.difficulty*0.4));
+      if (this.x < -60){ this.x = canvas.width + 60; }
+      if (this.x > canvas.width + 60){ this.x = -60; }
+    } else {
+      this.escapeTimer += dt; if (this.escapeTimer>0.5) this.remove = true;
+    }
+  }
+  draw(){
+    ctx.save(); ctx.translate(this.x, this.y);
+    ctx.globalAlpha=0.25; ctx.fillStyle='#1b2a3b'; ctx.beginPath(); ctx.ellipse(0,this.h*0.6,this.w*0.5,this.h*0.25,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle = this.tagged? '#7cb342' : '#5a3d2e';
+    ctx.fillRect(-this.w/2,-this.h/2,this.w,this.h);
+    ctx.fillStyle = this.tagged? '#9ccc65' : '#6d4c41';
+    ctx.fillRect(this.dir>0? this.w/2-10 : -this.w/2-18, -this.h/2-2, 18, 18);
+    ctx.strokeStyle='#e8e0cf'; ctx.lineWidth=3; ctx.beginPath();
+    const hornX = this.dir>0? this.w/2-6 : -this.w/2-6; ctx.moveTo(hornX,-this.h/2-2); ctx.quadraticCurveTo(hornX+(this.dir>0?10:-10), -this.h/2-12, hornX, -this.h/2-6); ctx.stroke();
+    ctx.restore();
+  }
+  get rect(){ return {x:this.x-this.w/2, y:this.y-this.h/2, w:this.w, h:this.h}; }
+}
 
-  function loop(){
-    if (!game || !game.running) return;
-    const t = now();
-    if (!game.paused){
-      const dt = (t - game.lastTime)/1000;
-      update(dt);
-      drawEverything();
-      updateHUD();
-      game.lastTime = t;
-      requestAnimationFrame(loop);
+class Spear {
+  constructor(x,y,dir){ this.x=x; this.y=y; this.dir=dir; this.speed=CONFIG.spearSpeed; this.lifetime=0; }
+  update(dt){ this.x += this.dir * this.speed * dt; this.lifetime += dt; if (this.x<-20||this.x>canvas.width+20||this.lifetime>3) this.remove=true; }
+  draw(){
+    ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.dir>0? 0 : Math.PI);
+    ctx.strokeStyle='#d7c27a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.stroke();
+    ctx.fillStyle='#cfd8dc'; ctx.beginPath(); ctx.moveTo(12,0); ctx.lineTo(6,-4); ctx.lineTo(6,4); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+
+class Rock {
+  constructor(x,y){ this.x=x; this.y=y; this.r=12+Math.random()*12; }
+  draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#7b8a8f'; ctx.beginPath(); ctx.arc(0,0,this.r,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+  get rect(){ return {x:this.x-this.r, y:this.y-this.r, w:this.r*2, h:this.r*2}; }
+}
+
+class StonePickup {
+  constructor(x,y){ this.x=x; this.y=y; this.r=10; }
+  draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#9aa4a9'; ctx.beginPath(); ctx.arc(0,0,this.r,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#cbd5db'; ctx.stroke(); ctx.restore(); }
+  get rect(){ return {x:this.x-this.r, y:this.y-this.r, w:this.r*2, h:this.r*2}; }
+}
+class WoodPickup {
+  constructor(x,y){ this.x=x; this.y=y; this.w=20; this.h=10; }
+  draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.fillStyle='#8b5a3c'; ctx.fillRect(-this.w/2,-this.h/2,this.w,this.h); ctx.strokeStyle='#caa07c'; ctx.strokeRect(-this.w/2,-this.h/2,this.w,this.h); ctx.restore(); }
+  get rect(){ return {x:this.x-this.w/2, y:this.y-this.h/2, w:this.w, h:this.h}; }
+}
+
+const keys = new Set();
+addEventListener('keydown', e=>{ keys.add(e.code); if (e.code==='Space'){ e.preventDefault(); shoot(); } if (e.code==='KeyP'){ togglePause(); } });
+addEventListener('keyup', e=> keys.delete(e.code));
+
+function initGame(){
+  const groundY = 220, padding = 40;
+  const herd=[]; const rocks=[]; const spears=[]; const stones=[]; const woods=[];
+  for (let i=0;i<CONFIG.herdSize;i++){
+    herd.push(new Bison(rand(padding, canvas.width-padding), rand(groundY+40, canvas.height-40), Math.random()<0.5? -1: 1));
+  }
+  for (let i=0;i<CONFIG.hazardCount;i++){
+    rocks.push(new Rock(rand(padding, canvas.width-padding), rand(groundY+20, canvas.height-30)));
+  }
+  for (let i=0;i<CONFIG.stones;i++){
+    stones.push(new StonePickup(rand(padding, canvas.width-padding), rand(groundY+30, canvas.height-40)));
+  }
+  for (let i=0;i<CONFIG.woods;i++){
+    woods.push(new WoodPickup(rand(padding, canvas.width-padding), rand(groundY+30, canvas.height-40)));
+  }
+  game = {
+    running:false, paused:false,
+    player:new Player(canvas.width/2, canvas.height-70),
+    herd, rocks, spears, stones, woods,
+    resources:{ meat:0, stone:0, wood:0 },
+    time: CONFIG.duration, lives:3, lastTime: now(),
+    direction:1
+  };
+  updateHUD(); drawEverything();
+}
+
+function start(){ initGame(); game.running=true; game.paused=false; loop(); }
+function togglePause(){ if (!game) return; game.paused=!game.paused; if(!game.paused){ game.lastTime=now(); loop(); } }
+function setDifficulty(){ const map=['Facile','Normal','Difficile']; CONFIG.difficulty=(CONFIG.difficulty+1)%3; ui.easyBtn.textContent='Niveau : '+map[CONFIG.difficulty]; }
+
+function shoot(){
+  if (!game || !game.running || game.paused) return;
+  const p=game.player;
+  if (p.spears>0){
+    const dir = game.direction || 1;
+    game.spears.push(new Spear(p.x + dir*20, p.y-10, dir));
+    p.spears--; p.sinceRecharge=0;
+  }
+}
+
+function rectHit(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+function update(dt){
+  const p = game.player;
+  const up = keys.has('ArrowUp')||keys.has('KeyW');
+  const down = keys.has('ArrowDown')||keys.has('KeyS');
+  const left = keys.has('ArrowLeft')||keys.has('KeyA');
+  const right = keys.has('ArrowRight')||keys.has('KeyD');
+  p.vx = (right?1:0) - (left?1:0); p.vy = (down?1:0) - (up?1:0);
+  if (p.vx!==0) game.direction = Math.sign(p.vx);
+  p.update(dt*60);
+
+  game.spears.forEach(s=> s.update(dt*60));
+  game.herd.forEach(b=> b.update(dt*60));
+
+  // Collisions javelot-bison -> viande
+  for (const s of game.spears){
+    for (const b of game.herd){
+      if (!b.tagged && rectHit({x:s.x-6,y:s.y-2,w:12,h:4}, b.rect)){
+        b.tagged = true; s.remove = true;
+        game.resources.meat++; 
+      }
     }
   }
 
-  ui.startBtn.addEventListener('click', start);
-  ui.pauseBtn.addEventListener('click', togglePause);
-  ui.easyBtn.addEventListener('click', ()=>{ setDifficulty(); initGame(); });
+  // Collisions joueur-bison -> dégâts
+  for (const b of game.herd){
+    if (!b.tagged && game.player.invincible<=0 && rectHit(b.rect, {x:p.x-p.r,y:p.y-p.r,w:p.r*2,h:p.r*2})){
+      game.lives--; game.player.invincible=2;
+      if (game.lives<=0){ end(false); }
+    }
+  }
 
-  initGame();
-  overlay('Ötzi – Chasse au bison', 'Marquez les bisons avec vos javelots pour nourrir le clan.');
+  // Collisions joueur-ressources
+  for (const st of game.stones){ if (!st.remove && rectHit(st.rect, {x:p.x-p.r,y:p.y-p.r,w:p.r*2,h:p.r*2})) { st.remove=true; game.resources.stone++; } }
+  for (const wd of game.woods){ if (!wd.remove && rectHit(wd.rect, {x:p.x-p.r,y:p.y-p.r,w:p.r*2,h:p.r*2})) { wd.remove=true; game.resources.wood++; } }
 
-  const resize = ()=>{ const rect = canvas.getBoundingClientRect(); const ratio = window.devicePixelRatio || 1; canvas.width = Math.round(rect.width*ratio); canvas.height = Math.round(rect.height*ratio); drawEverything(); };
-  new ResizeObserver(resize).observe(canvas);
-  </script>
+  // Obstacles
+  for (const r of game.rocks){ if (rectHit(r.rect, {x:p.x-p.r,y:p.y-p.r,w:p.r*2,h:p.r*2})) { p.x -= p.vx*6; p.y -= p.vy*6; } }
+
+  // Nettoyage
+  game.spears = game.spears.filter(s=>!s.remove);
+  game.herd = game.herd.filter(b=>!b.remove);
+  game.stones = game.stones.filter(s=>!s.remove);
+  game.woods = game.woods.filter(w=>!w.remove);
+
+  // Timer
+  game.time -= dt;
+  if (game.time<=0){ end(true); }
+
+  updateHUD();
+}
+
+function end(timeUp){
+  game.running=false;
+  drawEverything();
+  const g = CONFIG.goals;
+  const r = game.resources;
+  let title = "Bilan du campement";
+  let lines = [];
+  if (r.meat >= g.meat && r.stone >= g.stone && r.wood >= g.wood){
+    lines.push("Le clan peut passer la nuit. Nourriture, outils et bois sont suffisants.");
+  } else {
+    if (r.meat < g.meat) lines.push("Manque de nourriture : la chasse doit être plus efficace.");
+    if (r.stone < g.stone) lines.push("Manque d’outils : il faut davantage de pierre pour fabriquer et réparer.");
+    if (r.wood < g.wood) lines.push("Manque de bois : le feu et l’abri seront insuffisants contre le froid.");
+  }
+  lines.push("Conseil : observe le terrain et évite les troupeaux en mouvement.");
+  overlay(title, lines.join("\n"));
+}
+
+function drawEverything(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawParallax();
+  game.rocks.forEach(r=> r.draw());
+  game.stones.forEach(s=> s.draw());
+  game.woods.forEach(w=> w.draw());
+  game.herd.forEach(b=> b.draw());
+  game.player.draw();
+  game.spears.forEach(s=> s.draw());
+}
+
+function drawParallax(){
+  ctx.fillStyle = '#6aa3cf';
+  ctx.beginPath();
+  ctx.moveTo(0,220);
+  for (let x=0;x<=canvas.width;x+=40){
+    const peak = 220 - 30 - 20*Math.sin(x*0.01);
+    ctx.lineTo(x, peak);
+  }
+  ctx.lineTo(canvas.width,220); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#e7f2fb';
+  ctx.globalAlpha=.65;
+  ctx.beginPath(); ctx.moveTo(0,240); ctx.lineTo(canvas.width,240); ctx.lineTo(canvas.width,260); ctx.lineTo(0,260); ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+  ctx.fillStyle = '#86c06a'; ctx.fillRect(0,260,canvas.width,280);
+}
+
+function overlay(title, text){
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = 'white'; ctx.textAlign='center';
+  ctx.font = 'bold 36px system-ui'; ctx.fillText(title, canvas.width/2, canvas.height/2 - 40);
+  ctx.font = '16px system-ui';
+  const lines = text.split('\n');
+  lines.forEach((ln,i)=> ctx.fillText(ln, canvas.width/2, canvas.height/2 + i*22));
+  ctx.font = '14px system-ui'; ctx.fillText('Appuie sur « Lancer / Rejouer »', canvas.width/2, canvas.height/2 + 22*lines.length + 26);
+  ctx.restore();
+}
+
+function updateHUD(){
+  if (!game) return;
+  ui.time.textContent = Math.max(0, Math.ceil(game.time));
+  ui.meat.textContent = game.resources.meat;
+  ui.stone.textContent = game.resources.stone;
+  ui.wood.textContent = game.resources.wood;
+  ui.spears.textContent = game.player.spears;
+  ui.lives.textContent = game.lives;
+}
+
+function loop(){
+  if (!game || !game.running) return;
+  const t = now();
+  if (!game.paused){
+    const dt = (t - game.lastTime)/1000;
+    update(dt);
+    drawEverything();
+    game.lastTime = t;
+    requestAnimationFrame(loop);
+  }
+}
+
+ui.startBtn.addEventListener('click', start);
+ui.pauseBtn.addEventListener('click', togglePause);
+ui.easyBtn.addEventListener('click', ()=>{ setDifficulty(); initGame(); });
+
+initGame();
+overlay('Ötzi – Campement avant la nuit', 'Collecte de survie :\nBisons = nourriture, Pierres = outils, Bois = feu/abri.');
+
+const resize = ()=>{ const rect = canvas.getBoundingClientRect(); const ratio = window.devicePixelRatio || 1; canvas.width = Math.round(rect.width*ratio); canvas.height = Math.round(rect.height*ratio); drawEverything(); };
+new ResizeObserver(resize).observe(canvas);
+</script>
 </body>
 </html>
