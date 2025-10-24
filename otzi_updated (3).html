@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ötzi — Des glaces aux villages (version classe stabilisée)</title>
+<style>
+  html,body{margin:0;height:100%;background:#0e141b;color:#e8eef6;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px}
+  canvas{background:#93c5fd;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);width:960px;height:540px;outline:none}
+  .hud{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:center;font-weight:600}
+  .kbd{padding:2px 6px;border-radius:6px;background:#223049;font-family:ui-monospace,Menlo,Consolas,monospace}
+  button{padding:10px 14px;border-radius:10px;border:0;background:#1f6feb;color:#fff;font-weight:700;cursor:pointer}
+  button.secondary{background:#2b3950}
+  .pill{padding:3px 8px;border-radius:999px;background:#0b5;color:#fff;font-weight:700;font-size:12px}
+</style>
+
+<div class="wrap">
+  <h1>Ötzi — Des glaces aux villages <span style="background:#0b5;color:#fff;padding:3px 8px;border-radius:8px">version classe</span></h1>
+  <div class="hud">
+    <span>Niveau: <b id="levelName">—</b></span>
+    <span>Temps: <b id="time">—</b>s</span>
+    <span>Nourriture: <b id="meat">0</b></span>
+    <span>Pierre: <b id="stone">0</b></span>
+    <span>Bois: <b id="wood">0</b></span>
+    <span>Fibres: <b id="fiber">0</b></span>
+    <span>Argile: <b id="clay">0</b></span>
+    <span>Bétail: <b id="livestock">0</b></span>
+    <span>Objets: <b id="crafted">0</b></span>
+    <span>Javelots: <b id="spears">3</b></span>
+    <span>Vies: <b id="lives">3</b></span>
+    <button id="btnClothes" class="secondary" title="2 peaux + 2 fibres">C: Vêtements</button>
+    <button id="btnStart">Lancer / Rejouer</button>
+    <button id="btnPause" class="secondary">P: Pause</button>
+  </div>
+  <div>Commandes : <span class="kbd">← → ↑ ↓</span> / <span class="kbd">W A S D</span> • <span class="kbd">Espace</span> javelot • <span class="kbd">C</span> vêtements • <span class="kbd">F</span> fabriquer • <span class="kbd">Entrée</span> narration • <span class="kbd">1/2/3</span> QCM.</div>
+  <canvas id="game" width="960" height="540" tabindex="0" aria-label="Jeu pédagogique Néolithique"></canvas>
+  <div style="max-width:960px;text-align:center">
+    Étapes : <span class="pill">1. Chasse</span> → <span class="pill">2. Élevage</span> → <span class="pill">3. Artisanat</span> → <span class="pill">4. Agriculture</span>
+  </div>
+</div>
+
+<script>
+/* ---------- Base ---------- */
+const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
+const UI=id=>document.getElementById(id);
+const ui={ levelName:UI('levelName'), time:UI('time'), meat:UI('meat'), stone:UI('stone'), wood:UI('wood'),
+           fiber:UI('fiber'), clay:UI('clay'), livestock:UI('livestock'), crafted:UI('crafted'),
+           spears:UI('spears'), lives:UI('lives') };
+const btnStart=document.getElementById('btnStart'), btnPause=document.getElementById('btnPause'), btnClothes=document.getElementById('btnClothes');
+
+['keydown','keypress'].forEach(t=>document.addEventListener(t,e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Enter'].includes(e.code)) e.preventDefault();
+},{passive:false}));
+
+/* ---------- Outils ---------- */
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function hit(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ---------- Niveaux + narration ---------- */
+const NARR=[
+  {t:"Avant le niveau 1 — Les glaces", l:["Tu es Ötzi.","Le froid est mordant : chasse et protège-toi.","Objectifs : nourriture, outils, vêtements (2 peaux + 2 fibres)."]},
+  {t:"Avant le niveau 2 — Élevage", l:["Les glaces reculent : on apprivoise des animaux.","Approche les moutons : ils te suivent.","Guide-en 3 dans l’enclos."]},
+  {t:"Avant le niveau 3 — Artisanat", l:["Poterie, tissage, outils.","Recueille des ressources et fabrique 5 objets à l’atelier (F)."]},
+  {t:"Avant le niveau 4 — Agriculture", l:["On cultive et on s’installe : sédentarisation.","Atteins les objectifs puis QCM final."]},
+  {t:"Épilogue — Révolution néolithique", l:["Chasse → Élevage → Artisanat → Agriculture.","Réponds au QCM pour réviser."]}
+];
+
+const LVL=[
+  { name:"1/4 — Montagnes glaciaires (chasse)", time:70, cold:false,
+    herd:3, bisonSpeed:0.55,
+    stones:4, woods:3, fibers:0, clays:0, sheep:0,
+    goals:{meat:3,stone:2,wood:2,fiber:0,clay:0,livestock:0,crafted:0, clothes:true} },
+  { name:"2/4 — Plateau pastoral (élevage)", time:80, cold:false,
+    herd:2, bisonSpeed:0.75, stones:2, woods:3, fibers:2, clays:0, sheep:5, pen:{x:770,y:260,w:150,h:120},
+    goals:{meat:1,stone:1,wood:2,fiber:1,clay:0,livestock:3,crafted:0, clothes:false} },
+  { name:"3/4 — Village artisanal (atelier)", time:90, cold:false,
+    herd:0, stones:6, woods:6, fibers:6, clays:6, sheep:0, workshop:{x:120,y:270,w:120,h:100},
+    goals:{meat:0,stone:3,wood:4,fiber:3,clay:3,livestock:0,crafted:5, clothes:false} },
+  { name:"4/4 — Agriculture & sédentarisation", time:90, cold:false,
+    herd:2, bisonSpeed:0.75, stones:5, woods:4, fibers:7, clays:0, sheep:0,
+    goals:{meat:1,stone:3,wood:3,fiber:5,clay:0,livestock:0,crafted:0, clothes:true} }
+];
+
+/* ---------- Entités ---------- */
+class Player{
+  constructor(){ this.x=480; this.y=460; this.r=16; this.vx=0; this.vy=0; this.s=2.2; this.spears=3; this.reload=0; this.hides=0; this.warm=false; this.inv=0; }
+  rect(){ return {x:this.x-16,y:this.y-16,w:32,h:32}; }
+  update(dt){ this.x=clamp(this.x+this.vx*this.s*dt,16,canvas.width-16); this.y=clamp(this.y+this.vy*this.s*dt,220,canvas.height-16);
+              this.reload=Math.max(0,this.reload-dt); if(this.inv>0) this.inv-=dt; }
+  draw(){ ctx.save(); ctx.translate(this.x,this.y);
+    ctx.globalAlpha=.25; ctx.beginPath(); ctx.ellipse(0,this.r,this.r*.9,this.r*.4,0,0,6.283); ctx.fillStyle='#1b2a3b'; ctx.fill(); ctx.globalAlpha=1;
+    ctx.beginPath(); ctx.moveTo(0,-this.r); ctx.lineTo(this.r*.9,this.r); ctx.lineTo(-this.r*.9,this.r); ctx.closePath(); ctx.fillStyle=this.warm?'#8d6e63':'#7a5230'; ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-this.r*1.2,this.r*.55,0,6.283); ctx.fillStyle='#d7b49e'; ctx.fill(); ctx.restore(); }
+}
+class Spear{ constructor(x,y,dir){ this.x=x; this.y=y; this.dir=dir; this.life=0; }
+  update(dt){ this.x+=this.dir*5*dt*60; this.life+=dt; } draw(){ ctx.strokeStyle='#d7c27a'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(this.x-12,this.y); ctx.lineTo(this.x+12,this.y); ctx.stroke(); } }
+
+class Bison{
+  constructor(x,y,dir,speed){
+    this.x=x; this.y=y; this.dir=dir;
+    this.w=46; this.h=28;
+    this.tagged=false;
+    this.speed = speed ?? 0.7;
+  }
+  rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; }
+  update(dt){
+    if(!this.tagged){
+      this.x += this.dir * this.speed * dt * 60;
+      if(this.x<-60) this.x=canvas.width+60;
+      if(this.x>canvas.width+60) this.x=-60;
+    }
+  }
+  draw(){ ctx.fillStyle=this.tagged?'#7cb342':'#5a3d2e'; rr(this.x-this.w/2,this.y-this.h/2,this.w,this.h,6); ctx.fill(); }
+}
+
+class Sheep{ constructor(x,y){ this.x=x; this.y=y; this.w=28; this.h=18; this.tamed=false; this.vx=(Math.random()<0.5?-1:1)*0.35; this.remove=false; }
+  rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; }
+  update(dt,p){ if(!this.tamed){ this.x+=this.vx*dt*60*(0.5+Math.random()*0.2); if(this.x<20||this.x>canvas.width-20)this.vx*=-1;
+                 if(hit(this.rect(),p.rect())) this.tamed=true; }
+               else{ const dx=p.x-this.x, dy=p.y-this.y; this.x+=Math.sign(dx)*0.9*dt*60; this.y+=Math.sign(dy)*0.6*dt*60; } }
+  draw(){ ctx.fillStyle=this.tamed?'#fff8cc':'#f1f1f1'; rr(this.x-this.w/2,this.y-this.h/2,this.w,this.h,6); ctx.fill(); } }
+
+class Pickup{ constructor(x,y,type){ this.x=x; this.y=y; this.type=type; this.remove=false; }
+  rect(){ return {x:this.x-12,y:this.y-12,w:24,h:24}; }
+  draw(){ const m={stone:'#9aa4a9',wood:'#8b5a3c',fiber:'#b1c94a',clay:'#b46a3a'}; ctx.fillStyle=m[this.type]||'#ccc';
+         if(this.type==='stone'||this.type==='fiber'||this.type==='clay'){ ctx.beginPath(); ctx.arc(this.x,this.y,10,0,6.283); ctx.fill(); }
+         else{ rr(this.x-11,this.y-5,22,10,3); ctx.fill(); } }
+}
+
+/* ---------- État ---------- */
+let running=false,last=performance.now();
+let lvl=0, level=null, time=0, lives=3, cold=0, pen=null, workshop=null;
+let player=null, spears=[], herd=[], sheep=[], pickups=[], res=null;
+let narrative={active:true, idx:0};
+let grace = 5.0;   // 5 s d’invincibilité au début d’un niveau
+
+/* ---------- Décor + UI ---------- */
+function drawBG(i,t){
+  const sky=['#a4d2ff','#bfe3a1','#bfe3ff','#f5e6b2'][i]; ctx.fillStyle=sky; ctx.fillRect(0,0,canvas.width,220);
+  ctx.fillStyle=['#7aa3c8','#8fc07a','#7cc38e','#d6c877'][i]; ctx.beginPath(); ctx.moveTo(0,220);
+  for(let x=0;x<=canvas.width;x+=60){ const k=i===0?40: i===1?18: i===2?14:10; const h=220-(i===0?50:30)-k*Math.sin((x+t*0.0008)*0.01); ctx.lineTo(x,h); }
+  ctx.lineTo(canvas.width,220); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=['#86c06a','#9ec27a','#7cc38e','#cbbf8c'][i]; ctx.fillRect(0,240,canvas.width,canvas.height-240);
+  if(i===1 && pen){ ctx.fillStyle='rgba(139,90,60,0.35)'; ctx.fillRect(pen.x,pen.y,pen.w,pen.h); ctx.strokeStyle='#8b5a3c'; ctx.strokeRect(pen.x,pen.y,pen.w,pen.h); }
+  if(i===2 && workshop){ ctx.fillStyle='#c89b6d'; rr(workshop.x,workshop.y,workshop.w,workshop.h,10); ctx.fill(); }
+}
+function overlay(title,lines){
+  ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#1b2433'; rr(canvas.width/2-360,canvas.height/2-130,720,200,14); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 28px system-ui'; ctx.fillText(title,canvas.width/2,canvas.height/2-70);
+  ctx.font='16px system-ui'; (lines||[]).forEach((ln,i)=>ctx.fillText(ln,canvas.width/2,canvas.height/2-25+i*22));
+  ctx.fillStyle='#1f6feb'; rr(canvas.width/2-140,canvas.height/2+30,280,40,10); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 16px system-ui'; ctx.fillText('Commencer (Entrée ou clic)', canvas.width/2,canvas.height/2+56);
+}
+function HUD(){ ui.time.textContent=Math.max(0,Math.ceil(time)); ui.meat.textContent=res.meat; ui.stone.textContent=res.stone; ui.wood.textContent=res.wood;
+                ui.fiber.textContent=res.fiber; ui.clay.textContent=res.clay; ui.livestock.textContent=res.livestock; ui.crafted.textContent=res.crafted;
+                ui.spears.textContent=player.spears; ui.lives.textContent=lives; }
+
+function drawNarr(){ drawBG(lvl,performance.now()); overlay(NARR[narrative.idx].t, NARR[narrative.idx].l); }
+
+/* ---------- Init niveau ---------- */
+function initLevel(i){
+  lvl=i; level=LVL[i]; time=level.time; lives=3; cold=0; pen=level.pen||null; workshop=level.workshop||null;
+  player=new Player(); player.x = 120; player.y = 440;
+  grace = 5.0;
+  spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,clay:0,livestock:0,crafted:0};
+
+  // bisons spawn loin du joueur
+  for(let k=0;k<level.herd;k++){
+    const x = 480 + Math.random()*(canvas.width-520);
+    const y = 300 + Math.random()*180;
+    const dir = Math.random()<0.5 ? -1 : 1;
+    herd.push(new Bison(x, y, dir, level.bisonSpeed ?? 0.7));
+  }
+  // moutons
+  for(let k=0;k<level.sheep;k++){
+    const x = 420 + Math.random()*(canvas.width-460);
+    const y = 300 + Math.random()*160;
+    sheep.push(new Sheep(x,y));
+  }
+  // ressources
+  const add=(n,t)=>{ for(let k=0;k<n;k++) pickups.push(new Pickup(40+Math.random()*(canvas.width-80), 280+Math.random()*(canvas.height-320), t)); };
+  add(level.stones,'stone'); add(level.woods,'wood'); add(level.fibers,'fiber'); add(level.clays,'clay');
+  ui.levelName.textContent=level.name; HUD(); drawBG(lvl,performance.now());
+}
+
+/* ---------- Boucle ---------- */
+function loop(){
+  if(!running) return;
+  const t = performance.now();
+  let dt = (t - last) / 16.67;
+  last = t;
+  dt = Math.min(dt, 0.5);
+
+  // déplacements
+  const up=keys.has('ArrowUp')||keys.has('KeyW'), dn=keys.has('ArrowDown')||keys.has('KeyS'),
+        lf=keys.has('ArrowLeft')||keys.has('KeyA'), rg=keys.has('ArrowRight')||keys.has('KeyD');
+  player.vx=(rg?1:0)-(lf?1:0); player.vy=(dn?1:0)-(up?1:0); player.update(dt);
+
+  // projectiles & troupeaux
+  spears.forEach(s=>s.update(dt)); spears=spears.filter(s=>s.life<3 && s.x>-20 && s.x<canvas.width+20);
+  herd.forEach(b=>b.update(dt));
+
+  // collisions chasse (après la grâce et pas au niveau 1)
+  if(grace <= 0 && lvl !== 0){
+    for(const s of spears){ for(const b of herd){ if(!b.tagged && hit({x:s.x-6,y:s.y-2,w:12,h:4}, b.rect())){ b.tagged=true; s.life=10; res.meat++; player.hides++; } } }
+    for(const b of herd){ if(!b.tagged && player.inv<=0 && hit(b.rect(), player.rect())){ lives--; player.inv=2; if(lives<=0) return end(false); } }
+  }
+
+  // ressources
+  for(const p of pickups){ if(!p.remove && hit(p.rect(), player.rect())){ p.remove=true; res[p.type]++; } }
+  pickups=pickups.filter(p=>!p.remove);
+
+  // élevage
+  if(level.sheep>0 && pen){ for(const sh of sheep){ sh.update(dt,player); if(!sh.remove && sh.tamed && hit(sh.rect(), pen)){ sh.remove=true; res.livestock++; } } }
+  sheep=sheep.filter(s=>!s.remove);
+
+  // froid (niveau 1 = off)
+  if(grace <= 0 && level.cold && !player.warm && lvl !== 0){ cold+=dt; if(cold>3){ cold=0; lives--; if(lives<=0) return end(false); } }
+
+  // décrémente la grâce
+  if(grace > 0) grace -= dt/60;
+
+  time -= dt/60; if(time<=0) return end(true);
+
+  // rendu
+  drawBG(lvl,t);
+  pickups.forEach(p=>p.draw()); herd.forEach(b=>b.draw()); sheep.forEach(s=>s.draw()); player.draw(); spears.forEach(s=>s.draw());
+  HUD();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- Actions ---------- */
+function startGame(){ running=true; last=performance.now(); requestAnimationFrame(loop); }
+function shoot(){ if(!running) return; if(player.spears>0 && player.reload===0){ spears.push(new Spear(player.x+20,player.y-10,1)); player.spears--; player.reload=1.7; HUD(); } }
+function clothes(){ if(player.warm) return; if(player.hides>=2 && res.fiber>=2){ player.hides-=2; res.fiber-=2; player.warm=true; lives=Math.min(5,lives+1); HUD(); } }
+function craft(){ if(!running) return; if(!workshop) return; if(!hit(player.rect(),workshop)) return;
+  if(res.clay>=1 && res.wood>=1){ res.clay--; res.wood--; res.crafted++; }
+  else if(res.stone>=1 && res.wood>=1){ res.stone--; res.wood--; res.crafted++; }
+  else if(res.fiber>=2){ res.fiber-=2; res.crafted++; }
+  HUD();
+}
+function end(timeUp){
+  running=false;
+  const g=level.goals,r=res,need=[];
+  if(r.meat<g.meat)need.push('nourriture'); if(r.stone<g.stone)need.push('pierre'); if(r.wood<g.wood)need.push('bois');
+  if(r.fiber<g.fiber)need.push('fibres'); if(r.clay<g.clay)need.push('argile'); if(g.livestock && r.livestock<g.livestock)need.push('bétail');
+  if(g.crafted && r.crafted<g.crafted)need.push('objets'); if(g.clothes && !player.warm)need.push('vêtements');
+  const ok=need.length===0;
+  overlay(ok?'Objectif atteint':'Bilan — il manque', ok?['Entrée/clic pour continuer']:need);
+  narrative.active=true; narrative.idx = ok ? Math.min(lvl+1,4) : lvl;
+}
+
+/* ---------- Contrôles & stabilité onglet ---------- */
+let keys=new Set();
+document.addEventListener('keydown', e=>{
+  if(narrative.active && (e.code==='Enter'||e.code==='Space')){
+    if(narrative.idx===4){ /* QCM optionnel */ } else { initLevel(narrative.idx); startGame(); }
+    return;
+  }
+  if(['ArrowUp','KeyW','ArrowDown','KeyS','ArrowLeft','KeyA','ArrowRight','KeyD'].includes(e.code)) keys.add(e.code);
+  if(e.code==='Space') shoot();
+  if(e.code==='KeyC') clothes();
+  if(e.code==='KeyF') craft();
+  if(e.code==='KeyP'){ running=!running; if(running){ last=performance.now(); requestAnimationFrame(loop); } }
+});
+document.addEventListener('keyup', e=> keys.delete(e.code));
+document.addEventListener('click', ()=>{ if(narrative.active){ if(narrative.idx===4){ /* QCM */ } else { initLevel(narrative.idx); startGame(); } } });
+btnStart.addEventListener('click', ()=>{ narrative.idx=0; narrative.active=true; drawNarr(); });
+btnPause.addEventListener('click', ()=>{ running=!running; if(running){ last=performance.now(); requestAnimationFrame(loop); } });
+btnClothes.addEventListener('click', clothes);
+// Pause si l’onglet est masqué
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ running=false; }
+  else { running=true; last=performance.now(); requestAnimationFrame(loop); }
+});
+/* ---------- Démarrage ---------- */
+function boot(){ narrative.active=true; narrative.idx=0; drawNarr(); }
+window.addEventListener('load', boot);
+</script>
+</html>
