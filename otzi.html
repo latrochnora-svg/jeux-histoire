@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ötzi — version lente & stable</title>
+<title>Ötzi — Chasse • Élevage • Artisanat (variante complète)</title>
 <style>
-  :root{--bg:#0f1419;--panel:#161e27;--text:#e8eef6;--accent:#1f6feb;--muted:#2b3950}
+  :root{--bg:#0f1419;--panel:#161e27;--text:#e8eef6;--accent:#1f6feb;--muted:#2b3950;--ok:#12b886;--warn:#f08c00;--err:#e03131}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
   .wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px}
   canvas{background:#b7dcff;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.35);width:960px;height:540px}
@@ -14,18 +14,24 @@
   button{padding:8px 12px;border-radius:10px;border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
   button.secondary{background:var(--muted)}
   .pill{padding:3px 8px;border-radius:999px;background:#0b5;color:#fff;font-weight:700;font-size:12px}
+  /* Overlays HTML (fiables) */
   .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.65);z-index:10}
   .overlay.show{display:flex}
   .card{max-width:760px;background:var(--panel);padding:22px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
   h1,h2{margin:0 0 10px}
   ul{margin:6px 0 16px}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
+  /* Toast messages */
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1f2530;color:#fff;
+         padding:10px 14px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.4);font-weight:600;display:none;z-index:15}
+  .toast.show{display:block}
+  .toast.ok{background:var(--ok)} .toast.warn{background:var(--warn)} .toast.err{background:var(--err)}
 </style>
 </head>
 
 <body>
 <div class="wrap">
-  <h1>Ötzi — base classe stable</h1>
+  <h1>Ötzi — variante complète (classe)</h1>
   <div class="hud">
     <span>Niveau: <b id="levelName">—</b></span>
     <span>Temps: <b id="time">—</b>s</span>
@@ -42,7 +48,7 @@
     <button id="btnStart"  type="button">Lancer / Rejouer</button>
     <button id="btnPause"  type="button" class="secondary">P: Pause</button>
   </div>
-  <div>Commandes : <span class="kbd">← → ↑ ↓</span> / <span class="kbd">Z Q S D</span> • <span class="kbd">Espace</span> ou <span class="kbd">J</span> javelot • <span class="kbd">C</span> vêtements • <span class="kbd">F</span> fabriquer • <span class="kbd">Entrée</span> continuer.</div>
+  <div>Commandes : <span class="kbd">← → ↑ ↓</span> / <span class="kbd">Z Q S D</span> • <span class="kbd">Espace</span>/<span class="kbd">J</span> javelot • <span class="kbd">C</span> vêtements • <span class="kbd">F</span> fabriquer • <span class="kbd">Entrée</span> continuer.</div>
   <canvas id="game" width="960" height="540"></canvas>
   <div style="max-width:960px;text-align:center">
     Étapes : <span class="pill">1. Chasse</span> → <span class="pill">2. Élevage</span> → <span class="pill">3. Artisanat</span>
@@ -53,15 +59,11 @@
 <div id="ovIntro" class="overlay show">
   <div class="card">
     <h2>Avant le niveau 1 — Chasse dans les glaces</h2>
-    <p>Tu es Ötzi. Tu disposes de <b>50 javelots</b>. Objectifs : 2 viandes, 2 pierres, 2 bois, 1 vêtement (2 peaux + 2 fibres).</p>
-    <p><b>Contrôles :</b> ZQSD/Flèches se déplacer • Espace/J tirer • C vêtements • F fabriquer.</p>
-    <div class="row">
-      <button id="btnIntroGo" type="button">Commencer (Entrée)</button>
-    </div>
+    <p>Objectifs : <b>2 viandes</b>, <b>2 pierres</b>, <b>2 bois</b>, <b>vêtements</b> (2 peaux + 2 fibres). Tu as <b>50 javelots</b>. Les bisons sont lents.</p>
+    <div class="row"><button id="btnIntroGo" type="button">Commencer (Entrée)</button></div>
   </div>
 </div>
-
-<!-- NARR -->
+<!-- NARRATION -->
 <div id="ovNarr" class="overlay">
   <div class="card">
     <h2 id="narrTitle">—</h2>
@@ -69,7 +71,6 @@
     <div class="row"><button id="btnNarrGo" type="button">Lancer (Entrée)</button></div>
   </div>
 </div>
-
 <!-- FIN -->
 <div id="ovFinal" class="overlay">
   <div class="card">
@@ -82,48 +83,260 @@
   </div>
 </div>
 
+<div id="toast" class="toast"></div>
+
 <script>
+/* ===== Base UI & utils ===== */
 const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
 const UI=id=>document.getElementById(id);
 const ui={levelName:UI('levelName'),time:UI('time'),meat:UI('meat'),hides:UI('hides'),stone:UI('stone'),wood:UI('wood'),fiber:UI('fiber'),crafted:UI('crafted'),livestock:UI('livestock'),spears:UI('spears'),lives:UI('lives')};
 const btnStart=document.getElementById('btnStart'), btnPause=document.getElementById('btnPause'), btnClothes=document.getElementById('btnClothes');
 const ovIntro=document.getElementById('ovIntro'), ovNarr=document.getElementById('ovNarr'), ovFinal=document.getElementById('ovFinal');
 const btnIntroGo=document.getElementById('btnIntroGo'), btnNarrGo=document.getElementById('btnNarrGo'), btnNext=document.getElementById('btnNext'), btnReplay=document.getElementById('btnReplay');
-let uiState='intro';
+const narrTitle=document.getElementById('narrTitle'), narrList=document.getElementById('narrList');
+const toastEl=document.getElementById('toast');
+
+let uiState='intro'; // 'intro' | 'narr' | 'game' | 'final'
 function show(el){[ovIntro,ovNarr,ovFinal].forEach(e=>e.classList.remove('show'));el.classList.add('show');}
 function hideAll(){[ovIntro,ovNarr,ovFinal].forEach(e=>e.classList.remove('show'));}
-function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
-function hit(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
+function toast(msg, kind='warn', ms=1500){ toastEl.textContent=msg; toastEl.className='toast show '+kind; setTimeout(()=>toastEl.className='toast', ms); }
+
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function hit(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const NARR=[{t:"1/3 — Chasse",l:["Collecte pierre, bois et fibres.","Chasse 2 bisons (javelot).","Fabrique des vêtements (2 peaux + 2 fibres)."]}];
-const LVL=[{name:"1/3 — Chasse (glaces)",time:80,herd:3,bisonSpeed:0.12,stones:3,woods:3,fibers:3,goals:{meat:2,stone:2,wood:2,fiber:2,clothes:true}}];
-class Player{constructor(){this.x=120;this.y=440;this.r=16;this.vx=0;this.vy=0;this.s=2.2;this.spears=50;this.reload=0;this.hides=0;this.warm=false;this.inv=0;}
-rect(){return{x:this.x-16,y:this.y-16,w:32,h:32};}
-update(dt){this.x=clamp(this.x+this.vx*this.s*dt,16,canvas.width-16);this.y=clamp(this.y+this.vy*this.s*dt,220,canvas.height-16);this.reload=Math.max(0,this.reload-dt);if(this.inv>0)this.inv-=dt;}
-draw(){ctx.save();ctx.translate(this.x,this.y);ctx.globalAlpha=.25;ctx.beginPath();ctx.ellipse(0,this.r,this.r*.9,this.r*.4,0,0,6.283);ctx.fillStyle='#1b2a3b';ctx.fill();ctx.globalAlpha=1;ctx.beginPath();ctx.moveTo(0,-this.r);ctx.lineTo(this.r*.9,this.r);ctx.lineTo(-this.r*.9,this.r);ctx.closePath();ctx.fillStyle=this.warm?'#8d6e63':'#7a5230';ctx.fill();ctx.beginPath();ctx.arc(0,-this.r*1.2,this.r*.55,0,6.283);ctx.fillStyle='#d7b49e';ctx.fill();ctx.restore();}}
-class Spear{constructor(x,y,dir=1){this.x=x;this.y=y;this.dir=dir;this.life=0;}update(dt){this.x+=this.dir*7*dt*60;this.life+=dt;}draw(){ctx.strokeStyle='#ffd36e';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(this.x-14,this.y);ctx.lineTo(this.x+14,this.y);ctx.stroke();}}
-class Bison{constructor(x,y,dir=1,speed=0.12){this.x=x;this.y=y;this.dir=dir;this.w=46;this.h=28;this.tagged=false;this.speed=speed;}rect(){return{x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h};}update(dt){if(this.tagged)return;this.x+=this.dir*this.speed*dt*60;if(this.x<-60)this.x=canvas.width+60;if(this.x>canvas.width+60)this.x=-60;}draw(){ctx.fillStyle=this.tagged?'#7cb342':'#5a3d2e';rr(this.x-this.w/2,this.y-this.h/2,this.w,this.h,6);ctx.fill();}}
-class Pickup{constructor(x,y,type){this.x=x;this.y=y;this.type=type;this.remove=false;}rect(){return{x:this.x-12,y:this.y-12,w:24,h:24};}draw(){const m={stone:'#9aa4a9',wood:'#8b5a3c',fiber:'#b1c94a'};ctx.fillStyle=m[this.type]||'#ccc';if(this.type==='stone'||this.type==='fiber'){ctx.beginPath();ctx.arc(this.x,this.y,10,0,6.283);ctx.fill();}else{rr(this.x-11,this.y-5,22,10,3);ctx.fill();}}}
-let running=false,last=performance.now(),keys=new Set(),lvl=0,level=null,time=0,lives=3,player=null,spears=[],herd=[],pickups=[],res=null,grace=3;
-function drawBG(){ctx.fillStyle='#b7dcff';ctx.fillRect(0,0,canvas.width,220);ctx.fillStyle='#8cc58a';ctx.fillRect(0,240,canvas.width,canvas.height-240);}
-function HUD(){ui.time.textContent=Math.max(0,Math.ceil(time));ui.meat.textContent=res.meat;ui.hides.textContent=player.hides;ui.stone.textContent=res.stone;ui.wood.textContent=res.wood;ui.fiber.textContent=res.fiber;ui.spears.textContent=player.spears;ui.lives.textContent=lives;}
-function openNarr(i){uiState='narr';narrTitle.textContent=NARR[i].t;narrList.innerHTML='';NARR[i].l.forEach(s=>{const li=document.createElement('li');li.textContent=s;narrList.appendChild(li);});show(ovNarr);}
-function initLevel(i){lvl=i;level=LVL[i];time=level.time;lives=3;player=new Player();spears=[];herd=[];pickups=[];res={meat:0,stone:0,wood:0,fiber:0};for(let k=0;k<level.herd;k++){const x=540+Math.random()*(canvas.width-560);const y=300+Math.random()*160;const dir=Math.random()<0.5?-1:1;herd.push(new Bison(x,y,dir,level.bisonSpeed));}const add=(n,t)=>{for(let k=0;k<n;k++)pickups.push(new Pickup(60+Math.random()*(canvas.width-120),280+Math.random()*(canvas.height-340),t));};add(level.stones,'stone');add(level.woods,'wood');add(level.fibers,'fiber');ui.levelName.textContent=level.name;HUD();drawBG();}
-function loop(){if(!running)return;const t=performance.now();let dt=(t-last)/16.67;last=t;dt=Math.min(dt,0.5);const up=keys.has('ArrowUp')||keys.has('KeyW')||keys.has('KeyZ'),dn=keys.has('ArrowDown')||keys.has('KeyS'),lf=keys.has('ArrowLeft')||keys.has('KeyA')||keys.has('KeyQ'),rg=keys.has('ArrowRight')||keys.has('KeyD');player.vx=(rg?1:0)-(lf?1:0);player.vy=(dn?1:0)-(up?1:0);player.update(dt);herd.forEach(b=>b.update(dt));spears.forEach(s=>{s.update(dt);for(const b of herd){if(!b.tagged&&hit({x:s.x-10,y:s.y-3,w:20,h:6},b.rect())){b.tagged=true;res.meat++;player.hides++;s.life=10;}}});spears=spears.filter(s=>s.life<3&&s.x>-20&&s.x<canvas.width+20);for(const p of pickups){if(!p.remove&&hit(p.rect(),player.rect())){p.remove=true;res[p.type]++;}}pickups=pickups.filter(p=>!p.remove);time-=dt/60;if(time<=0)end();drawBG();pickups.forEach(p=>p.draw());herd.forEach(b=>b.draw());player.draw();spears.forEach(s=>s.draw());HUD();requestAnimationFrame(loop);}
-function startGame(){uiState='game';hideAll();running=true;last=performance.now();requestAnimationFrame(loop);}
-function shoot(){if(uiState!=='game')return;if(player.spears>0&&player.reload===0){spears.push(new Spear(player.x+22,player.y-8,1));player.spears--;player.reload=0.35;HUD();}}
-function clothes(){if(uiState!=='game')return;if(player.hides>=2&&res.fiber>=2){player.hides-=2;res.fiber-=2;player.warm=true;lives=Math.min(5,lives+1);HUD();}}
-function end(){running=false;finalTitle.textContent="Fin de partie";finalMsg.textContent="Merci pour ton entraînement Ötzi !";uiState='final';show(ovFinal);}
-window.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Enter'){if(uiState==='intro'){hideAll();openNarr(0);}else if(uiState==='narr'){hideAll();initLevel(0);startGame();}else if(uiState==='final'){hideAll();show(ovIntro);uiState='intro';}return;}if(uiState!=='game')return;if(['ArrowUp','KeyW','KeyZ','ArrowDown','KeyS','ArrowLeft','KeyA','KeyQ','ArrowRight','KeyD'].includes(e.code))keys.add(e.code);if(e.code==='Space'||e.code==='KeyJ')shoot();if(e.code==='KeyC')clothes();if(e.code==='KeyP'){running=!running;if(running){last=performance.now();requestAnimationFrame(loop);}}},{capture:true});
-window.addEventListener('keyup',e=>{if(uiState==='game')keys.delete(e.code);},{capture:true});
-btnIntroGo.onclick=()=>{hideAll();openNarr(0);};
-btnNarrGo.onclick=()=>{hideAll();initLevel(0);startGame();};
-btnNext.onclick=()=>{hideAll();show(ovIntro);uiState='intro';};
-btnReplay.onclick=()=>{hideAll();initLevel(0);startGame();};
-btnStart.onclick=()=>{uiState='intro';show(ovIntro);};
-btnPause.onclick=()=>{if(uiState==='game'){running=!running;if(running){last=performance.now();requestAnimationFrame(loop);}}};
+
+/* ===== Contenu pédagogique ===== */
+const NARR=[
+  {t:"1/3 — Chasse", l:["Collecte pierre/bois/fibres.","Chasse 2 bisons (javelot).","Fabrique des vêtements (2 peaux + 2 fibres)."]},
+  {t:"2/3 — Élevage", l:["Approche les moutons pour les apprivoiser.","Guide 3 moutons dans l’enclos (zone claire)."]},
+  {t:"3/3 — Artisanat", l:["À l’atelier, appuie sur F pour fabriquer (pierre+bois ou 2 fibres).","Objectif : fabriquer 5 objets."]}
+];
+
+const LVL=[
+  { name:"1/3 — Chasse (glaces)", time:95, herd:3,  bisonSpeed:0.06, stones:4, woods:4, fibers:3, sheep:0,
+    goals:{meat:2,stone:2,wood:2,fiber:2,crafted:0,livestock:0,clothes:true} },
+  { name:"2/3 — Élevage (plateau)", time:100, herd:0, bisonSpeed:0.08, stones:2, woods:2, fibers:2, sheep:5, pen:{x:770,y:260,w:150,h:120},
+    goals:{meat:0,stone:1,wood:1,fiber:1,crafted:0,livestock:3,clothes:false} },
+  { name:"3/3 — Artisanat (village)", time:110, herd:0, stones:6, woods:6, fibers:6, sheep:0, workshop:{x:120,y:270,w:120,h:100},
+    goals:{meat:0,stone:3,wood:3,fiber:3,crafted:5,livestock:0,clothes:false} }
+];
+
+/* ===== Entités ===== */
+class Player{
+  constructor(){ this.x=120; this.y=440; this.r=16; this.vx=0; this.vy=0; this.s=2.2;
+    this.spears=50; this.reload=0; this.hides=0; this.warm=false; this.inv=0; }
+  rect(){ return {x:this.x-16,y:this.y-16,w:32,h:32}; }
+  update(dt){ this.x=clamp(this.x+this.vx*this.s*dt,16,canvas.width-16); this.y=clamp(this.y+this.vy*this.s*dt,220,canvas.height-16);
+              this.reload=Math.max(0,this.reload-dt); if(this.inv>0)this.inv-=dt; }
+  draw(){ ctx.save(); ctx.translate(this.x,this.y);
+    ctx.globalAlpha=.25; ctx.beginPath(); ctx.ellipse(0,this.r,this.r*.9,this.r*.4,0,0,6.283); ctx.fillStyle='#1b2a3b'; ctx.fill(); ctx.globalAlpha=1;
+    ctx.beginPath(); ctx.moveTo(0,-this.r); ctx.lineTo(this.r*.9,this.r); ctx.lineTo(-this.r*.9,this.r); ctx.closePath(); ctx.fillStyle=this.warm?'#8d6e63':'#7a5230'; ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-this.r*1.2,this.r*.55,0,6.283); ctx.fillStyle='#d7b49e'; ctx.fill(); ctx.restore(); }
+}
+class Spear{ constructor(x,y,dir=1){ this.x=x; this.y=y; this.dir=dir; this.life=0; }
+  update(dt){ this.x += this.dir * 7 * dt * 60; this.life += dt; }
+  draw(){ ctx.strokeStyle='#ffd36e'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(this.x-14,this.y); ctx.lineTo(this.x+14,this.y); ctx.stroke(); } }
+class Bison{ constructor(x,y,dir=1,speed=0.06){ this.x=x; this.y=y; this.dir=dir; this.w=46; this.h=28; this.tagged=false; this.speed=speed; }
+  rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; }
+  update(dt){ if(this.tagged) return; this.x += this.dir * this.speed * dt * 60;
+    if(this.x<-60) this.x=canvas.width+60; if(this.x>canvas.width+60) this.x=-60; }
+  draw(){ ctx.fillStyle=this.tagged?'#7cb342':'#5a3d2e'; rr(this.x-this.w/2,this.y-this.h/2,this.w,this.h,6); ctx.fill(); } }
+class Sheep{
+  constructor(x,y){ this.x=x; this.y=y; this.w=28; this.h=18; this.tamed=false; this.vx=(Math.random()<0.5?-1:1)*0.30; this.remove=false; }
+  rect(){ return {x:this.x-this.w/2,y:this.y-this.h/2,w:this.w,h:this.h}; }
+  update(dt,p){ if(!this.tamed){ this.x+=this.vx*dt*60*(0.5+Math.random()*0.2); if(this.x<20||this.x>canvas.width-20)this.vx*=-1; if(hit(this.rect(),p.rect())) this.tamed=true; }
+               else{ const dx=p.x-this.x, dy=p.y-this.y; this.x+=Math.sign(dx)*0.8*dt*60; this.y+=Math.sign(dy)*0.55*dt*60; } }
+  draw(){ ctx.fillStyle=this.tamed?'#fff8cc':'#f1f1f1'; rr(this.x-this.w/2,this.y-this.h/2,this.w,this.h,6); ctx.fill(); }
+}
+class Pickup{
+  constructor(x,y,type){ this.x=x; this.y=y; this.type=type; this.remove=false; }
+  rect(){ return {x:this.x-12,y:this.y-12,w:24,h:24}; }
+  draw(){ const m={stone:'#9aa4a9',wood:'#8b5a3c',fiber:'#b1c94a'}; ctx.fillStyle=m[this.type]||'#ccc';
+    if(this.type==='stone'||this.type==='fiber'){ ctx.beginPath(); ctx.arc(this.x,this.y,10,0,6.283); ctx.fill(); }
+    else { rr(this.x-11,this.y-5,22,10,3); ctx.fill(); } }
+}
+
+/* ===== État ===== */
+let running=false,last=performance.now(),keys=new Set();
+let lvl=0, level=null, time=0, lives=3, pen=null, workshop=null;
+let player=null, spears=[], herd=[], sheep=[], pickups=[], res=null;
+let grace=3.0;
+let canAdvance=false; // autorisation de passer au niveau suivant
+
+/* ===== Décor + HUD ===== */
+function drawBG(i,t=performance.now()){
+  ctx.fillStyle=['#b7dcff','#cfe8b6','#f3e2b2'][i]||'#b7dcff'; ctx.fillRect(0,0,canvas.width,220);
+  ctx.fillStyle=['#84a9cf','#90c582','#d3c27f'][i]||'#84a9cf'; ctx.beginPath(); ctx.moveTo(0,220);
+  for(let x=0;x<=canvas.width;x+=60){ const k=i===0?40: i===1?18: 10; const h=220-(i===0?50:30)-k*Math.sin((x+t*0.001)*0.01); ctx.lineTo(x,h); }
+  ctx.lineTo(canvas.width,220); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=['#8cc58a','#a3c987','#cbbf8c'][i]||'#8cc58a'; ctx.fillRect(0,240,canvas.width,canvas.height-240);
+  if(i===1 && pen){ ctx.fillStyle='rgba(139,90,60,0.35)'; ctx.fillRect(pen.x,pen.y,pen.w,pen.h); ctx.strokeStyle='#8b5a3c'; ctx.strokeRect(pen.x,pen.y,pen.w,pen.h); }
+  if(i===2 && workshop){ ctx.fillStyle='#c89b6d'; rr(workshop.x,workshop.y,workshop.w,workshop.h,10); ctx.fill(); }
+}
+function HUD(){
+  ui.time.textContent=Math.max(0,Math.ceil(time));
+  ui.meat.textContent=res.meat; ui.hides.textContent=player.hides;
+  ui.stone.textContent=res.stone; ui.wood.textContent=res.wood; ui.fiber.textContent=res.fiber;
+  ui.crafted.textContent=res.crafted||0; ui.livestock.textContent=res.livestock||0;
+  ui.spears.textContent=player.spears; ui.lives.textContent=lives;
+}
+
+/* ===== Narration ===== */
+function openNarr(i){
+  uiState='narr';
+  narrTitle.textContent=NARR[i].t;
+  narrList.innerHTML='';
+  NARR[i].l.forEach(s=>{ const li=document.createElement('li'); li.textContent=s; narrList.appendChild(li); });
+  show(ovNarr);
+}
+
+/* ===== Init niveau ===== */
+function initLevel(i){
+  lvl=i; level=LVL[i]; time=level.time; lives=3; pen=level.pen||null; workshop=level.workshop||null;
+  player=new Player(); player.x=120; player.y=440; player.spears=50; player.hides=0; player.warm=false; player.inv=0;
+  grace=3.0; spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,crafted:0,livestock:0};
+  for(let k=0;k<level.herd;k++){ const x=540+Math.random()*(canvas.width-560); const y=300+Math.random()*160; const dir=Math.random()<0.5?-1:1; herd.push(new Bison(x,y,dir,level.bisonSpeed||0.06)); }
+  for(let k=0;k<(level.sheep||0);k++){ const x=420+Math.random()*(canvas.width-460); const y=300+Math.random()*160; sheep.push(new Sheep(x,y)); }
+  const add=(n,t)=>{ for(let k=0;k<n;k++) pickups.push(new Pickup(60+Math.random()*(canvas.width-120), 280+Math.random()*(canvas.height-340), t)); };
+  add(level.stones,'stone'); add(level.woods,'wood'); add(level.fibers,'fiber');
+  ui.levelName.textContent=level.name; HUD(); drawBG(lvl);
+  canAdvance=false;
+}
+
+/* ===== Boucle ===== */
+function loop(){
+  if(!running) return;
+  const t=performance.now(); let dt=(t-last)/16.67; last=t; dt=Math.min(dt,0.5);
+
+  const up=keys.has('ArrowUp')||keys.has('KeyW')||keys.has('KeyZ'), dn=keys.has('ArrowDown')||keys.has('KeyS'),
+        lf=keys.has('ArrowLeft')||keys.has('KeyA')||keys.has('KeyQ'), rg=keys.has('ArrowRight')||keys.has('KeyD');
+  player.vx=(rg?1:0)-(lf?1:0); player.vy=(dn?1:0)-(up?1:0); player.update(dt);
+
+  herd.forEach(b=>b.update(dt));
+  spears.forEach(s=>{
+    s.update(dt);
+    for(const b of herd){
+      if(!b.tagged && hit({x:s.x-10,y:s.y-3,w:20,h:6}, b.rect())){ b.tagged=true; res.meat++; player.hides++; s.life=10; }
+    }
+  });
+  spears=spears.filter(s=>s.life<3 && s.x>-20 && s.x<canvas.width+20);
+
+  for(const p of pickups){ if(!p.remove && hit(p.rect(), player.rect())){ p.remove=true; res[p.type]++; } }
+  pickups=pickups.filter(p=>!p.remove);
+
+  // Élevage (L2)
+  if(level.sheep>0 && pen){ for(const sh of sheep){ sh.update(dt,player); if(!sh.remove && sh.tamed && hit(sh.rect(), pen)){ sh.remove=true; res.livestock++; } } }
+  sheep=sheep.filter(s=>!s.remove);
+
+  if(grace>0) grace-=dt/60;
+  time -= dt/60; if(time<=0) return end();
+
+  drawBG(lvl,t);
+  pickups.forEach(p=>p.draw()); herd.forEach(b=>b.draw()); sheep.forEach(s=>s.draw()); player.draw(); spears.forEach(s=>s.draw());
+  HUD();
+  requestAnimationFrame(loop);
+}
+
+/* ===== Actions ===== */
+function startGame(){ uiState='game'; hideAll(); running=true; last=performance.now(); requestAnimationFrame(loop); }
+function shoot(){ if(uiState!=='game') return; if(player.spears>0 && player.reload===0){ spears.push(new Spear(player.x+22,player.y-8,1)); player.spears--; player.reload=0.35; HUD(); } }
+function clothes(){
+  if(uiState!=='game') return;
+  if(player.warm){ toast("Tu portes déjà des vêtements.",'ok'); return; }
+  if(player.hides>=2 && res.fiber>=2){ player.hides-=2; res.fiber-=2; player.warm=true; lives=Math.min(5,lives+1); HUD(); toast("Vêtements fabriqués (+1 vie max).",'ok'); }
+  else { const need=[]; if(player.hides<2) need.push(`${2-player.hides} peau(x)`); if(res.fiber<2) need.push(`${2-res.fiber} fibre(s)`); toast("Manque: "+need.join(" & "), 'warn'); }
+}
+function craft(){
+  if(uiState!=='game') return;
+  if(!workshop){ toast("Atelier au niveau 3.", 'warn'); return; }
+  if(!hit(player.rect(), workshop)){ toast("Place-toi sur l’atelier.", 'warn'); return; }
+  if(res.stone>=1 && res.wood>=1){ res.stone--; res.wood--; res.crafted++; HUD(); toast("Objet fabriqué (pierre+bois).",'ok'); return; }
+  if(res.fiber>=2){ res.fiber-=2; res.crafted++; HUD(); toast("Objet tissé (2 fibres).",'ok'); return; }
+  toast("Ressources insuffisantes pour fabriquer.", 'warn');
+}
+
+/* ===== Fin & Gating ===== */
+function goalsOK(){
+  const g=level.goals,r=res;
+  if((r.meat||0)   < (g.meat||0)) return false;
+  if((r.stone||0)  < (g.stone||0)) return false;
+  if((r.wood||0)   < (g.wood||0)) return false;
+  if((r.fiber||0)  < (g.fiber||0)) return false;
+  if((r.crafted||0)< (g.crafted||0)) return false;
+  if((r.livestock||0)<(g.livestock||0)) return false;
+  if((g.clothes||false) && !player.warm) return false;
+  return true;
+}
+function end(){
+  running=false;
+  const g=level.goals,r=res,need=[];
+  if((r.meat||0)   < (g.meat||0)) need.push(`nourriture ${r.meat||0}/${g.meat}`);
+  if((r.stone||0)  < (g.stone||0)) need.push(`pierre ${r.stone||0}/${g.stone}`);
+  if((r.wood||0)   < (g.wood||0)) need.push(`bois ${r.wood||0}/${g.wood}`);
+  if((r.fiber||0)  < (g.fiber||0)) need.push(`fibres ${r.fiber||0}/${g.fiber}`);
+  if((r.crafted||0)< (g.crafted||0)) need.push(`objets ${r.crafted||0}/${g.crafted}`);
+  if((r.livestock||0)<(g.livestock||0)) need.push(`bétail ${r.livestock||0}/${g.livestock}`);
+  if((g.clothes||false) && !player.warm) need.push("vêtements");
+
+  canAdvance = need.length===0;
+  const title = canAdvance ? "Objectifs atteints ✅" : "Bilan — il manque :";
+  const msg   = canAdvance ? "Bravo ! Tu peux passer au niveau suivant." : need.join(", ");
+  document.getElementById('finalTitle').textContent=title;
+  document.getElementById('finalMsg').textContent=msg;
+  uiState='final'; show(ovFinal);
+
+  // Bouton "Suivant" activé seulement si OK
+  btnNext.disabled = !canAdvance;
+  btnNext.style.opacity = canAdvance ? '1' : '0.6';
+}
+
+/* ===== Contrôles ===== */
+window.addEventListener('keydown', (e)=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+
+  if(e.code==='Enter'){
+    if(uiState==='intro'){ hideAll(); openNarr(0); return; }
+    if(uiState==='narr'){ hideAll(); initLevel(lvl); startGame(); return; }
+    if(uiState==='final'){
+      if(canAdvance){
+        hideAll();
+        if(lvl<LVL.length-1){ lvl++; openNarr(lvl); } else { show(ovIntro); uiState='intro'; }
+      } else {
+        hideAll(); initLevel(lvl); startGame();
+      }
+      return;
+    }
+  }
+
+  if(uiState!=='game') return;
+
+  if(['ArrowUp','KeyW','KeyZ','ArrowDown','KeyS','ArrowLeft','KeyA','KeyQ','ArrowRight','KeyD'].includes(e.code)) keys.add(e.code);
+  if(e.code==='Space'||e.code==='KeyJ') shoot();
+  if(e.code==='KeyC') clothes();
+  if(e.code==='KeyF') craft();
+  if(e.code==='KeyP'){ running=!running; if(running){ last=performance.now(); requestAnimationFrame(loop); } }
+}, {capture:true});
+window.addEventListener('keyup', e=>{ if(uiState==='game') keys.delete(e.code); }, {capture:true});
+
+/* ===== Boutons ===== */
+btnIntroGo.onclick=()=>{ hideAll(); openNarr(0); };
+btnNarrGo.onclick =()=>{ hideAll(); initLevel(lvl); startGame(); };
+btnNext.onclick   =()=>{ if(!canAdvance){ toast("Termine les objectifs pour continuer.",'warn'); return; }
+                         hideAll(); if(lvl<LVL.length-1){ lvl++; openNarr(lvl); } else { show(ovIntro); uiState='intro'; } };
+btnReplay.onclick =()=>{ hideAll(); initLevel(lvl); startGame(); };
+btnStart.onclick  =()=>{ uiState='intro'; show(ovIntro); };
+btnPause.onclick  =()=>{ if(uiState==='game'){ running=!running; if(running){ last=performance.now(); requestAnimationFrame(loop); } } };
 btnClothes.onclick=clothes;
-function boot(){ctx.fillStyle='#b7dcff';ctx.fillRect(0,0,canvas.width,220);ctx.fillStyle='#8cc58a';ctx.fillRect(0,240,canvas.width,canvas.height-240);ui.levelName.textContent='—';ui.time.textContent='—';uiState='intro';show(ovIntro);}
+
+/* ===== Boot ===== */
+function boot(){
+  // décor immédiat pour éviter écran vide
+  ctx.fillStyle='#b7dcff'; ctx.fillRect(0,0,canvas.width,220);
+  ctx.fillStyle='#8cc58a'; ctx.fillRect(0,240,canvas.width,canvas.height-240);
+  ui.levelName.textContent='—'; ui.time.textContent='—';
+  // démarrer au niveau 1 pour la narration
+  lvl=0; openNarr(0);
+}
 boot();
 </script>
 </body>
