@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Ötzi — Des glaces au village (auto + respawn)</title>
+<title>Ötzi — Des glaces au village (atelier + auto)</title>
 <style>
   :root{--bg:#0f1419;--panel:#161e27;--text:#e8eef6;--accent:#1f6feb;--muted:#2b3950;--ok:#12b886;--warn:#f08c00}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
@@ -35,17 +35,20 @@
     <span>Pierre: <b id="stone">0</b></span>
     <span>Bois: <b id="wood">0</b></span>
     <span>Fibres: <b id="fiber">0</b></span>
+    <span>Objets: <b id="crafted">0</b></span>
     <span>Bétail: <b id="livestock">0</b></span>
     <span>Sagaies: <b id="spears">50</b></span>
     <span>Vies: <b id="lives">3</b></span>
     <button id="btnStart">Lancer / Rejouer</button>
     <button id="btnPause" class="secondary">Pause</button>
   </div>
-  <div>Commandes :
+  <div>
+    Commandes :
     <span class="kbd">← → ↑ ↓</span> / <span class="kbd">Z Q S D</span> •
     <span class="kbd">Espace</span>/<span class="kbd">J</span> lancer une <b>sagaie</b> •
     <span class="kbd">R</span> tailler <b>+5 sagaies</b> (1 pierre + 1 bois) •
-    <span class="kbd">C</span> fabriquer des <b>vêtements</b> (2 peaux + 2 fibres).
+    <span class="kbd">C</span> <b>vêtements</b> (2 peaux + 2 fibres) •
+    <span class="kbd">F</span> <b>fabriquer à l’atelier</b> (niv. 3).
   </div>
   <canvas id="game" width="960" height="540"></canvas>
   <div style="max-width:960px;text-align:center">
@@ -53,7 +56,7 @@
   </div>
 </div>
 
-<!-- Objectifs -->
+<!-- Objectifs / narration -->
 <div id="ovNarr" class="overlay show">
   <div class="card">
     <h2 id="narrTitle">—</h2>
@@ -65,31 +68,35 @@
 <div id="toast" class="toast"></div>
 
 <script>
-/* ===== helpers ===== */
+/* ========= helpers ========= */
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d');
-const ui={levelName:$('levelName'),time:$('time'),meat:$('meat'),hides:$('hides'),
-  stone:$('stone'),wood:$('wood'),fiber:$('fiber'),livestock:$('livestock'),
-  spears:$('spears'),lives:$('lives')};
-const ovNarr=$('ovNarr'),narrTitle=$('narrTitle'),narrList=$('narrList');
-const btnNarrGo=$('btnNarrGo'),btnStart=$('btnStart'),btnPause=$('btnPause');
+const ui={levelName:$('levelName'),time:$('time'),meat:$('meat'),hides:$('hides'),stone:$('stone'),
+  wood:$('wood'),fiber:$('fiber'),crafted:$('crafted'),livestock:$('livestock'),spears:$('spears'),lives:$('lives')};
+const ovNarr=$('ovNarr'),narrTitle=$('narrTitle'),narrList=$('narrList'),btnNarrGo=$('btnNarrGo');
+const btnStart=$('btnStart'),btnPause=$('btnPause');
 const toast=(m,k='warn',ms=1400)=>{const t=document.querySelector('.toast');t.textContent=m;t.className='toast show '+k;setTimeout(()=>t.className='toast',ms);};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const hit=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+function roundRect(x,y,w,h,r,stroke=false,color='#ffe08a'){ctx.save();ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+  if(stroke){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();} else ctx.fill(); ctx.restore();}
 
-/* ===== narration & niveaux ===== */
+/* ========= narration & niveaux ========= */
 const NARR=[
- {t:"1/3 — Chasse (glaces)",l:["Objectifs : 2 viandes, 2 pierres, 2 bois, vêtements (2 peaux + 2 fibres).","50 sagaies offertes.","Espace/J sagaie • R +5 sagaies • C vêtements."]},
- {t:"2/3 — Élevage (plateau)",l:["Objectifs : guider 2 bêtes dans l’enclos + 2 pierres + 2 bois.","Les bêtes te suivent si tu les touches."]},
- {t:"3/3 — Artisanat (village)",l:["Objectifs : fabriquer 5 objets (pierre+bois ou 2 fibres).","Place-toi sur l’atelier et appuie sur F (optionnel ici)."]}
+ {t:"1/3 — Chasse (glaces)",l:["Objectifs : 2 viandes, 2 pierres, 2 bois et <b>vêtements</b> (2 peaux + 2 fibres).",
+  "50 sagaies offertes. Espace/J sagaie • R +5 sagaies • C vêtements."]},
+ {t:"2/3 — Élevage (plateau)",l:["Objectifs : guider <b>2 bêtes</b> dans l’enclos + 2 pierres + 2 bois.","Les bêtes te suivent quand tu les touches."]},
+ {t:"3/3 — Artisanat (village)",l:["Objectifs : <b>fabriquer 5 objets</b> à l’atelier.","Place-toi dans l’encadré ‘Atelier’ et appuie sur <b>F</b> (pierre+bois ou 2 fibres)."]}
 ];
 const LVL=[
  {name:"1/3 — Chasse (glaces)",time:90,herd:3,bisonSpeed:0.04,stones:4,woods:4,fibers:3,goals:{meat:2,stone:2,wood:2,clothes:true}},
  {name:"2/3 — Élevage (plateau)",time:90,herd:0,stones:2,woods:2,fibers:2,sheep:3,pen:{x:770,y:260,w:150,h:120},goals:{livestock:2,stone:2,wood:2}},
- {name:"3/3 — Artisanat (village)",time:100,herd:0,stones:6,woods:6,fibers:6,goals:{crafted:5}}
+ /* Atelier visible et obligatoire au niv. 3 */
+ {name:"3/3 — Artisanat (village)",time:100,herd:0,stones:6,woods:6,fibers:6,workshop:{x:120,y:270,w:160,h:110},goals:{crafted:5}}
 ];
 
-/* ===== entités ===== */
+/* ========= entités ========= */
 class Player{
   constructor(){this.x=120;this.y=440;this.s=2.2;this.spears=50;this.hides=0;this.warm=false;this.vx=0;this.vy=0;this.reload=0;}
   rect(){return {x:this.x-16,y:this.y-16,w:32,h:32};}
@@ -121,14 +128,13 @@ class Pickup{
     else roundRect(this.x-11,this.y-5,22,10,3);
   }
 }
-function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();ctx.fill();}
 
-/* ===== état ===== */
+/* ========= état ========= */
 let running=false,last=performance.now(),keys=new Set();
 let lvl=0,level=null,time=0,lives=3,player=null,spears=[],herd=[],sheep=[],pickups=[],res=null,pen=null,workshop=null,autoDone=false;
 const RESPAWN={interval:6,min:{stone:1,wood:1,fiber:1},batch:2}; let respawnTimer=0;
 
-/* ===== décor ===== */
+/* ========= décor ========= */
 function drawMountains(){
   ctx.fillStyle='#8db0d8';ctx.beginPath();
   ctx.moveTo(0,220);ctx.lineTo(140,190);ctx.lineTo(300,215);ctx.lineTo(480,180);ctx.lineTo(680,205);ctx.lineTo(860,190);ctx.lineTo(canvas.width,220);
@@ -140,27 +146,34 @@ function drawBG(i){
   ctx.fillStyle=['#8cc58a','#a3c987','#cbbf8c'][i]||'#8cc58a';ctx.fillRect(0,240,canvas.width,canvas.height-240);
   ctx.fillStyle='#7aa0bf';ctx.fillRect(0,220,canvas.width,20);
 }
-function HUD(){ui.levelName.textContent=level.name;ui.time.textContent=Math.max(0,Math.ceil(time));
-  ui.meat.textContent=res.meat;ui.hides.textContent=player.hides;ui.stone.textContent=res.stone;ui.wood.textContent=res.wood;ui.fiber.textContent=res.fiber;ui.livestock.textContent=res.livestock;ui.spears.textContent=player.spears;ui.lives.textContent=lives;}
 
-/* ===== narration ===== */
-function openNarr(i){narrTitle.textContent=NARR[i].t;narrList.innerHTML='';NARR[i].l.forEach(s=>{const li=document.createElement('li');li.textContent=s;narrList.appendChild(li);});ovNarr.classList.add('show');}
+/* ========= narration ========= */
+function openNarr(i){narrTitle.innerHTML=NARR[i].t; n arrList.innerHTML=''; NARR[i].l.forEach(s=>{const li=document.createElement('li'); li.innerHTML=s; narrList.appendChild(li);}); ovNarr.classList.add('show');}
 
-/* ===== init niveau ===== */
+/* ========= init niveau ========= */
 function initLevel(i){
-  lvl=i;level=LVL[i];time=level.time;lives=3;autoDone=false;respawnTimer=0;
-  player=new Player();spears=[];herd=[];sheep=[];pickups=[];res={meat:0,stone:0,wood:0,fiber:0,livestock:0,crafted:0};
-  pen=level.pen||null;workshop=level.workshop||null;
-  // troupeau & bêtes
+  lvl=i; level=LVL[i]; time=level.time; lives=3; autoDone=false; respawnTimer=0;
+  player=new Player(); spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,livestock:0,crafted:0};
+  pen=level.pen||null; workshop=level.workshop||null;
+
   for(let k=0;k<(level.herd||0);k++) herd.push(new Bison(600+Math.random()*200,300+Math.random()*160,level.bisonSpeed||0.04));
   for(let k=0;k<(level.sheep||0);k++) sheep.push(new Sheep(420+Math.random()*300,300+Math.random()*160));
-  // ressources
-  const add=(n,t)=>{for(let k=0;k<n;k++)pickups.push(new Pickup(60+Math.random()*(canvas.width-120),280+Math.random()*(canvas.height-340),t));};
+
+  const add=(n,t)=>{for(let k=0;k<n;k++) pickups.push(new Pickup(60+Math.random()*(canvas.width-120),280+Math.random()*(canvas.height-340),t));};
   add(level.stones||0,'stone'); add(level.woods||0,'wood'); add(level.fibers||0,'fiber');
+
   HUD(); drawBG(lvl);
 }
+function HUD(){
+  ui.levelName.textContent=level.name;
+  ui.time.textContent=Math.max(0,Math.ceil(time));
+  ui.meat.textContent=res.meat; ui.hides.textContent=player.hides;
+  ui.stone.textContent=res.stone; ui.wood.textContent=res.wood; ui.fiber.textContent=res.fiber;
+  ui.crafted.textContent=res.crafted; ui.livestock.textContent=res.livestock;
+  ui.spears.textContent=player.spears; ui.lives.textContent=lives;
+}
 
-/* ===== règles/objectif ===== */
+/* ========= objectifs ========= */
 function goalsOK(){
   const g=level.goals,r=res;
   if((r.meat||0)<(g.meat||0))return false;
@@ -172,16 +185,28 @@ function goalsOK(){
   return true;
 }
 
-/* ===== gameplay ===== */
+/* ========= actions ========= */
 function shoot(){ if(player.spears>0 && player.reload<=0){ spears.push(new Spear(player.x+22,player.y-8)); player.spears--; player.reload=.38; HUD(); } }
 function clothes(){
   if(player.warm){ toast("Tu portes déjà des vêtements.","ok"); return; }
   if(player.hides>=2 && res.fiber>=2){ player.hides-=2; res.fiber-=2; player.warm=true; HUD(); toast("Vêtements fabriqués.","ok"); }
   else toast("Il faut 2 peaux + 2 fibres.","warn");
 }
-function craftSagaies(){ if(res.stone>=1 && res.wood>=1){ res.stone--; res.wood--; player.spears=Math.max(0,Math.min(99,player.spears+5)); HUD(); toast("+5 sagaies.","ok"); } else toast("1 pierre + 1 bois nécessaires.","warn"); }
+function craftSagaies(){ if(res.stone>=1 && res.wood>=1){ res.stone--; res.wood--; player.spears=Math.min(99,player.spears+5); HUD(); toast("+5 sagaies.","ok"); } else toast("1 pierre + 1 bois nécessaires.","warn"); }
+function insideWorkshop(){ return !!(workshop && hit(player.rect(), workshop)); }
+function craftAtWorkshop(){
+  if(lvl!==2){ toast("L’atelier est au niveau 3.","warn"); return; }
+  if(!insideWorkshop()){ toast("Place-toi dans l’atelier (encadré or).","warn"); return; }
+  if(res.stone>=1 && res.wood>=1){
+    res.stone--; res.wood--; res.crafted++; HUD(); toast("Objet fabriqué (pierre+bois).","ok");
+  }else if(res.fiber>=2){
+    res.fiber-=2; res.crafted++; HUD(); toast("Objet tressé (2 fibres).","ok");
+  }else{
+    toast("Ressources insuffisantes (1 pierre+1 bois ou 2 fibres).","warn");
+  }
+}
 
-/* ===== fin ===== */
+/* ========= fin ========= */
 function end(fromTimeout){
   running=false;
   if(goalsOK()){
@@ -192,7 +217,7 @@ function end(fromTimeout){
   }
 }
 
-/* ===== boucle ===== */
+/* ========= boucle ========= */
 function loop(){
   if(!running) return;
   const t=performance.now(); let dt=(t-last)/16.67; last=t; dt=Math.min(dt,0.5);
@@ -204,7 +229,7 @@ function loop(){
         rg=keys.has('ArrowRight')||keys.has('KeyD');
   player.vx=(rg?1:0)-(lf?1:0); player.vy=(dn?1:0)-(up?1:0); player.update(dt);
 
-  // troupeau & sagaies
+  // bisons & sagaies
   herd.forEach(b=>b.update(dt));
   spears.forEach(s=>{
     s.update(dt);
@@ -225,15 +250,15 @@ function loop(){
       if(!sh.remove && sh.tamed && hit(sh.rect(), pen)){ sh.remove=true; res.livestock++; }
     }
     sheep=sheep.filter(s=>!s.remove);
-    // si besoin, on re-pop une bête pour atteindre l’objectif
-    if(sheep.length<1 && res.livestock<(LVL[lvl].goals.livestock||0)) sheep.push(new Sheep(380+Math.random()*400,320+Math.random()*120));
+    if(sheep.length<1 && res.livestock<(LVL[lvl].goals.livestock||0))
+      sheep.push(new Sheep(380+Math.random()*400,320+Math.random()*120));
   }
 
   // respawn ressources + bison si manque viande/peaux
   respawnTimer+=dt/60;
   if(respawnTimer>=RESPAWN.interval){
     respawnTimer=0;
-    const count=(t)=>pickups.filter(p=>!p.remove && p.type===t).length;
+    const count=t=>pickups.filter(p=>!p.remove && p.type===t).length;
     const add=(n,t)=>{for(let k=0;k<n;k++)pickups.push(new Pickup(60+Math.random()*(canvas.width-120),280+Math.random()*(canvas.height-340),t));};
     let spawn=false;
     for(const k of ['stone','wood','fiber']) if(count(k)<RESPAWN.min[k]){ add(RESPAWN.batch,k); spawn=true; }
@@ -248,19 +273,21 @@ function loop(){
   // temps & rendu
   time -= dt/60; if(time<=0){ end(true); return; }
   drawBG(lvl);
-  if(pen){ ctx.strokeStyle="#ffffff99"; ctx.lineWidth=2; roundRect(pen.x,pen.y,pen.w,pen.h,10); }
+  if(pen){ roundRect(pen.x,pen.y,pen.w,pen.h,10,true,"#ffffff99"); }
+  if(workshop){
+    roundRect(workshop.x,workshop.y,workshop.w,workshop.h,10,true,"#ffe08a");
+    ctx.fillStyle="#ffe08a"; ctx.font="bold 14px system-ui"; ctx.textAlign="left";
+    ctx.fillText("Atelier (F)", workshop.x+8, workshop.y+18);
+  }
   pickups.forEach(p=>p.draw()); herd.forEach(b=>b.draw()); sheep.forEach(s=>s.draw()); player.draw(); spears.forEach(s=>s.draw());
   HUD();
 
-  // passage automatique
-  if(!autoDone && goalsOK()){
-    autoDone=true; toast("Objectifs atteints — niveau suivant…","ok",900);
-    setTimeout(()=>end(false), 450);
-  }
+  // passage auto
+  if(!autoDone && goalsOK()){ autoDone=true; toast("Objectifs atteints — niveau suivant…","ok",900); setTimeout(()=>end(false), 450); }
   requestAnimationFrame(loop);
 }
 
-/* ===== contrôles ===== */
+/* ========= contrôles ========= */
 window.addEventListener('keydown',e=>{
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if(!running) return;
@@ -268,15 +295,16 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Space'||e.code==='KeyJ') shoot();
   if(e.code==='KeyC') clothes();
   if(e.code==='KeyR') craftSagaies();
+  if(e.code==='KeyF') craftAtWorkshop();
 });
 window.addEventListener('keyup',e=>{ if(running) keys.delete(e.code); });
 
-/* ===== boutons ===== */
-btnStart.onclick = () => openNarr(lvl);
-btnPause.onclick = () => { running=!running; if(running){ last=performance.now(); requestAnimationFrame(loop); } };
-btnNarrGo.onclick = () => { ovNarr.classList.remove('show'); initLevel(lvl); running=true; last=performance.now(); requestAnimationFrame(loop); };
+/* ========= boutons / boot ========= */
+btnStart.onclick=()=>openNarr(lvl);
+btnPause.onclick=()=>{running=!running; if(running){ last=performance.now(); requestAnimationFrame(loop);} };
+btnNarrGo.onclick=()=>{ ovNarr.classList.remove('show'); initLevel(lvl); running=true; last=performance.now(); requestAnimationFrame(loop); };
 
-/* ===== boot ===== */
+function openNarr(i){narrTitle.textContent=NARR[i].t; narrList.innerHTML=''; NARR[i].l.forEach(s=>{const li=document.createElement('li'); li.innerHTML=s; narrList.appendChild(li);}); ovNarr.classList.add('show');}
 function boot(){ drawBG(0); openNarr(0); }
 boot();
 </script>
