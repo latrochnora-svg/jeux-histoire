@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ötzi — Chasse • Élevage • Artisanat (variante complète)</title>
+<title>Ötzi — variante respawn (classe)</title>
 <style>
   :root{--bg:#0f1419;--panel:#161e27;--text:#e8eef6;--accent:#1f6feb;--muted:#2b3950;--ok:#12b886;--warn:#f08c00;--err:#e03131}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
@@ -14,14 +14,12 @@
   button{padding:8px 12px;border-radius:10px;border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
   button.secondary{background:var(--muted)}
   .pill{padding:3px 8px;border-radius:999px;background:#0b5;color:#fff;font-weight:700;font-size:12px}
-  /* Overlays HTML (fiables) */
   .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.65);z-index:10}
   .overlay.show{display:flex}
   .card{max-width:760px;background:var(--panel);padding:22px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
   h1,h2{margin:0 0 10px}
   ul{margin:6px 0 16px}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
-  /* Toast messages */
   .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1f2530;color:#fff;
          padding:10px 14px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.4);font-weight:600;display:none;z-index:15}
   .toast.show{display:block}
@@ -31,7 +29,7 @@
 
 <body>
 <div class="wrap">
-  <h1>Ötzi — variante complète (classe)</h1>
+  <h1>Ötzi — variante respawn (classe)</h1>
   <div class="hud">
     <span>Niveau: <b id="levelName">—</b></span>
     <span>Temps: <b id="time">—</b>s</span>
@@ -59,7 +57,7 @@
 <div id="ovIntro" class="overlay show">
   <div class="card">
     <h2>Avant le niveau 1 — Chasse dans les glaces</h2>
-    <p>Objectifs : <b>2 viandes</b>, <b>2 pierres</b>, <b>2 bois</b>, <b>vêtements</b> (2 peaux + 2 fibres). Tu as <b>50 javelots</b>. Les bisons sont lents.</p>
+    <p>Objectifs : <b>2 viandes</b>, <b>2 pierres</b>, <b>2 bois</b>, <b>vêtement</b> (2 peaux + 2 fibres). Tu as <b>50 javelots</b>. Les bisons sont lents.</p>
     <div class="row"><button id="btnIntroGo" type="button">Commencer (Entrée)</button></div>
   </div>
 </div>
@@ -96,6 +94,7 @@ const btnIntroGo=document.getElementById('btnIntroGo'), btnNarrGo=document.getEl
 const narrTitle=document.getElementById('narrTitle'), narrList=document.getElementById('narrList');
 const toastEl=document.getElementById('toast');
 
+/* ===== Etats ===== */
 let uiState='intro'; // 'intro' | 'narr' | 'game' | 'final'
 function show(el){[ovIntro,ovNarr,ovFinal].forEach(e=>e.classList.remove('show'));el.classList.add('show');}
 function hideAll(){[ovIntro,ovNarr,ovFinal].forEach(e=>e.classList.remove('show'));}
@@ -108,8 +107,8 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* ===== Contenu pédagogique ===== */
 const NARR=[
   {t:"1/3 — Chasse", l:["Collecte pierre/bois/fibres.","Chasse 2 bisons (javelot).","Fabrique des vêtements (2 peaux + 2 fibres)."]},
-  {t:"2/3 — Élevage", l:["Approche les moutons pour les apprivoiser.","Guide 3 moutons dans l’enclos (zone claire)."]},
-  {t:"3/3 — Artisanat", l:["À l’atelier, appuie sur F pour fabriquer (pierre+bois ou 2 fibres).","Objectif : fabriquer 5 objets."]}
+  {t:"2/3 — Élevage", l:["Apprivoise les moutons (les toucher).","Guide 3 moutons dans l’enclos (zone claire)."]},
+  {t:"3/3 — Artisanat", l:["À l’atelier, appuie sur F pour fabriquer (pierre+bois ou 2 fibres).","Fabrique 5 objets."]}
 ];
 
 const LVL=[
@@ -156,12 +155,18 @@ class Pickup{
     else { rr(this.x-11,this.y-5,22,10,3); ctx.fill(); } }
 }
 
-/* ===== État ===== */
+/* ===== État global ===== */
 let running=false,last=performance.now(),keys=new Set();
 let lvl=0, level=null, time=0, lives=3, pen=null, workshop=null;
 let player=null, spears=[], herd=[], sheep=[], pickups=[], res=null;
-let grace=3.0;
-let canAdvance=false; // autorisation de passer au niveau suivant
+let grace=3.0, canAdvance=false;
+
+/* ===== Respawn config ===== */
+const RESPAWN={ interval:6,  // secondes
+  min:{ stone:1, wood:1, fiber:1 }, // stock visible minimum
+  batch:2                       // combien on ajoute quand on est sous le minimum
+};
+let respawnTimer=0;
 
 /* ===== Décor + HUD ===== */
 function drawBG(i,t=performance.now()){
@@ -193,8 +198,8 @@ function openNarr(i){
 /* ===== Init niveau ===== */
 function initLevel(i){
   lvl=i; level=LVL[i]; time=level.time; lives=3; pen=level.pen||null; workshop=level.workshop||null;
-  player=new Player(); player.x=120; player.y=440; player.spears=50; player.hides=0; player.warm=false; player.inv=0;
-  grace=3.0; spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,crafted:0,livestock:0};
+  player=new Player(); player.spears=50; player.hides=0; player.warm=false; player.inv=0; player.x=120; player.y=440;
+  grace=3.0; respawnTimer=0; spears=[]; herd=[]; sheep=[]; pickups=[]; res={meat:0,stone:0,wood:0,fiber:0,crafted:0,livestock:0};
   for(let k=0;k<level.herd;k++){ const x=540+Math.random()*(canvas.width-560); const y=300+Math.random()*160; const dir=Math.random()<0.5?-1:1; herd.push(new Bison(x,y,dir,level.bisonSpeed||0.06)); }
   for(let k=0;k<(level.sheep||0);k++){ const x=420+Math.random()*(canvas.width-460); const y=300+Math.random()*160; sheep.push(new Sheep(x,y)); }
   const add=(n,t)=>{ for(let k=0;k<n;k++) pickups.push(new Pickup(60+Math.random()*(canvas.width-120), 280+Math.random()*(canvas.height-340), t)); };
@@ -228,6 +233,29 @@ function loop(){
   if(level.sheep>0 && pen){ for(const sh of sheep){ sh.update(dt,player); if(!sh.remove && sh.tamed && hit(sh.rect(), pen)){ sh.remove=true; res.livestock++; } } }
   sheep=sheep.filter(s=>!s.remove);
 
+  // ===== RÉAPPARITION automatique =====
+  respawnTimer += dt/60;
+  if(respawnTimer >= RESPAWN.interval){
+    respawnTimer = 0;
+    // Comptes visibles
+    const countVis = (type)=> pickups.filter(p=>!p.remove && p.type===type).length;
+    const add=(n,t)=>{ for(let k=0;k<n;k++) pickups.push(new Pickup(60+Math.random()*(canvas.width-120), 280+Math.random()*(canvas.height-340), t)); };
+    let spawned=false;
+    for(const k of ['stone','wood','fiber']){
+      if(countVis(k) < (RESPAWN.min[k]||0)){ add(RESPAWN.batch, k); spawned=true; }
+    }
+    // Au niveau 1 : si plus aucun bison vivant et il manque de la viande/peau → on en remet 1
+    if(lvl===0){
+      const alive = herd.some(b=>!b.tagged);
+      const needMeat = res.meat < (LVL[0].goals.meat||0) || player.hides < 2;
+      if(!alive && needMeat){
+        const y=300+Math.random()*160, dir=Math.random()<0.5?-1:1, x=dir<0?canvas.width+60:-60;
+        herd.push(new Bison(x,y,dir,LVL[0].bisonSpeed||0.06)); spawned=true;
+      }
+    }
+    if(spawned) toast("Nouvelles ressources apparues.", "ok", 1200);
+  }
+
   if(grace>0) grace-=dt/60;
   time -= dt/60; if(time<=0) return end();
 
@@ -243,7 +271,7 @@ function shoot(){ if(uiState!=='game') return; if(player.spears>0 && player.relo
 function clothes(){
   if(uiState!=='game') return;
   if(player.warm){ toast("Tu portes déjà des vêtements.",'ok'); return; }
-  if(player.hides>=2 && res.fiber>=2){ player.hides-=2; res.fiber-=2; player.warm=true; lives=Math.min(5,lives+1); HUD(); toast("Vêtements fabriqués (+1 vie max).",'ok'); }
+  if(player.hides>=2 && res.fiber>=2){ player.hides-=2; res.fiber-=2; player.warm=true; lives=Math.min(5,lives+1); HUD(); toast("Vêtements fabriqués (+1 vie).",'ok'); }
   else { const need=[]; if(player.hides<2) need.push(`${2-player.hides} peau(x)`); if(res.fiber<2) need.push(`${2-res.fiber} fibre(s)`); toast("Manque: "+need.join(" & "), 'warn'); }
 }
 function craft(){
@@ -276,7 +304,7 @@ function end(){
   if((r.fiber||0)  < (g.fiber||0)) need.push(`fibres ${r.fiber||0}/${g.fiber}`);
   if((r.crafted||0)< (g.crafted||0)) need.push(`objets ${r.crafted||0}/${g.crafted}`);
   if((r.livestock||0)<(g.livestock||0)) need.push(`bétail ${r.livestock||0}/${g.livestock}`);
-  if((g.clothes||false) && !player.warm) need.push("vêtements");
+  if((g.clothes||false) && !player.warm) need.push("vêtement");
 
   canAdvance = need.length===0;
   const title = canAdvance ? "Objectifs atteints ✅" : "Bilan — il manque :";
@@ -285,7 +313,6 @@ function end(){
   document.getElementById('finalMsg').textContent=msg;
   uiState='final'; show(ovFinal);
 
-  // Bouton "Suivant" activé seulement si OK
   btnNext.disabled = !canAdvance;
   btnNext.style.opacity = canAdvance ? '1' : '0.6';
 }
@@ -298,12 +325,8 @@ window.addEventListener('keydown', (e)=>{
     if(uiState==='intro'){ hideAll(); openNarr(0); return; }
     if(uiState==='narr'){ hideAll(); initLevel(lvl); startGame(); return; }
     if(uiState==='final'){
-      if(canAdvance){
-        hideAll();
-        if(lvl<LVL.length-1){ lvl++; openNarr(lvl); } else { show(ovIntro); uiState='intro'; }
-      } else {
-        hideAll(); initLevel(lvl); startGame();
-      }
+      if(canAdvance){ hideAll(); if(lvl<LVL.length-1){ lvl++; openNarr(lvl); } else { show(ovIntro); uiState='intro'; } }
+      else { hideAll(); initLevel(lvl); startGame(); }
       return;
     }
   }
@@ -330,11 +353,9 @@ btnClothes.onclick=clothes;
 
 /* ===== Boot ===== */
 function boot(){
-  // décor immédiat pour éviter écran vide
   ctx.fillStyle='#b7dcff'; ctx.fillRect(0,0,canvas.width,220);
   ctx.fillStyle='#8cc58a'; ctx.fillRect(0,240,canvas.width,canvas.height-240);
   ui.levelName.textContent='—'; ui.time.textContent='—';
-  // démarrer au niveau 1 pour la narration
   lvl=0; openNarr(0);
 }
 boot();
